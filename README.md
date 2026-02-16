@@ -2,6 +2,8 @@
 
 An interactive command-line interface for chatting with LLMs using the Koog framework and OpenRouter.
 
+![Demonstration](demo.gif)
+
 ## Features
 
 - 🗨️ **Interactive REPL**: Chat with the LLM in a conversational loop
