@@ -48,15 +48,18 @@ suspend fun startInteractiveCli(apiKey: String, config: CliConfig) {
         println("\nGoodbye!")
     })
 
-    // Create the agent
-    val agent = AIAgent(
-        promptExecutor = simpleOpenRouterExecutor(apiKey),
-        systemPrompt = config.systemPrompt,
-        llmModel = OpenRouterModels.GPT4oMini
-    )
+    // Create the prompt executor (reusable across agents)
+    val promptExecutor = simpleOpenRouterExecutor(apiKey)
 
-    // Create conversation manager
-    val conversationManager = ConversationManager(agent)
+    // Create conversation manager with an agent factory
+    // This creates a new agent instance for each message to avoid single-use constraint
+    val conversationManager = ConversationManager {
+        AIAgent(
+            promptExecutor = promptExecutor,
+            systemPrompt = config.systemPrompt,
+            llmModel = OpenRouterModels.GPT4oMini
+        )
+    }
 
     // Print welcome message
     printWelcome()
@@ -64,7 +67,7 @@ suspend fun startInteractiveCli(apiKey: String, config: CliConfig) {
     // Main REPL loop
     while (true) {
         print("\nYou: ")
-        val input = readlnOrNull()?.trim() ?: break
+        val input = readMultilineInput() ?: break
 
         // Handle empty input
         if (input.isEmpty()) {
@@ -115,6 +118,34 @@ suspend fun startInteractiveCli(apiKey: String, config: CliConfig) {
     }
 }
 
+/**
+ * Reads multiline input from the user.
+ * - For single line input: just press Enter
+ * - For multiline input: press Enter twice (empty line signals end of input)
+ * - Returns null if EOF is reached
+ */
+fun readMultilineInput(): String? {
+    val lines = mutableListOf<String>()
+    
+    while (true) {
+        val line = readlnOrNull() ?: return if (lines.isEmpty()) null else lines.joinToString("\n")
+        
+        // If we get an empty line and we already have content, that's the end signal
+        if (line.trim().isEmpty() && lines.isNotEmpty()) {
+            break
+        }
+        
+        // Skip leading empty lines
+        if (line.trim().isEmpty() && lines.isEmpty()) {
+            continue
+        }
+        
+        lines.add(line)
+    }
+    
+    return lines.joinToString("\n").trim()
+}
+
 fun printWelcome() {
     println(
         """
@@ -124,7 +155,8 @@ fun printWelcome() {
         ║  Powered by Koog & OpenRouter         ║
         ╚═══════════════════════════════════════╝
         
-        Type your message and press Enter.
+        Type your message and press Enter twice to send.
+        (First Enter = new line, Second Enter on empty line = send)
         Commands: /help, /clear, /history, /exit
         
         """.trimIndent()
@@ -142,7 +174,10 @@ fun printInteractiveHelp() {
           /exit       Exit the application
           /quit       Exit the application
         
-        Simply type your message and press Enter to chat!
+        How to use:
+          - Type your message (can be multiple lines)
+          - Press Enter twice (empty line) to send
+          - For single line, just press Enter twice
         """.trimIndent()
     )
 }

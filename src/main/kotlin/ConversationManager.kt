@@ -1,12 +1,16 @@
 import ai.koog.agents.core.agent.AIAgent
 
-class ConversationManager(private val agent: AIAgent<String, String>) {
+class ConversationManager(
+    private val agentFactory: () -> AIAgent<String, String>
+) {
     private val conversationHistory = mutableListOf<Pair<String, String>>()
 
     /**
      * Send a message to the agent and get a response while maintaining conversation history
      */
     suspend fun sendMessage(userMessage: String): String {
+        // Create a new agent instance for each message to avoid single-use constraint
+        val agent = agentFactory()
         val response = agent.run(userMessage)
         
         // Store in our local history for display purposes
