@@ -2,7 +2,9 @@
 
 An interactive command-line interface for chatting with LLMs using the Koog framework and OpenRouter.
 
-![Demonstration](demo.gif)
+Created for AI Advent puzzle solution
+
+![Demonstration](solution/w1d1/demo.gif)
 
 ## Features
 
