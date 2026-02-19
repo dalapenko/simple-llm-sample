@@ -57,7 +57,8 @@ suspend fun startInteractiveCli(apiKey: String, config: CliConfig) {
         AIAgent(
             promptExecutor = promptExecutor,
             systemPrompt = config.systemPrompt,
-            llmModel = OpenRouterModels.GPT4oMini
+            llmModel = OpenRouterModels.GPT4oMini,
+            temperature = config.temperature
         )
     }
 
