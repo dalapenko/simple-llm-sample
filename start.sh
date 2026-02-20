@@ -6,8 +6,9 @@ set -e
 echo "=== LLM Chat CLI - Quick Start ==="
 echo ""
 
-# Default temperature value
+# Default values
 TEMPERATURE="1.0"
+MODEL="gpt-4o-mini"
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -16,11 +17,21 @@ while [[ $# -gt 0 ]]; do
             TEMPERATURE="$2"
             shift 2
             ;;
+        --model)
+            MODEL="$2"
+            shift 2
+            ;;
         --help|-h)
             echo "Usage: ./start.sh [OPTIONS]"
             echo ""
             echo "Options:"
             echo "  --temperature VALUE    Set LLM temperature (0.0-2.0, default: 1.0)"
+            echo "  --model MODEL          AI model to use (default: gpt-4o-mini)"
+            echo "                         Available models:"
+            echo "                           gpt-4o-mini  - GPT-4o Mini (default)"
+            echo "                           mistral-7b   - Mistral 7B Instruct"
+            echo "                           qwen-2.5     - Qwen 2.5 72B Instruct"
+            echo "                           gpt-4o       - GPT-4o"
             echo "  --help, -h            Show this help message"
             echo ""
             echo "Environment Variables:"
@@ -29,6 +40,8 @@ while [[ $# -gt 0 ]]; do
             echo "Examples:"
             echo "  ./start.sh"
             echo "  ./start.sh --temperature 0.7"
+            echo "  ./start.sh --model gpt-4o"
+            echo "  ./start.sh --model mistral-7b --temperature 0.5"
             exit 0
             ;;
         *)
@@ -51,6 +64,7 @@ if [ -z "$OPENROUTER_API_KEY" ]; then
 fi
 
 echo "✅ API key found"
+echo "🤖 Model: $MODEL"
 echo "🌡️  Temperature: $TEMPERATURE"
 echo ""
 echo "Building application..."
@@ -63,5 +77,5 @@ echo "Starting LLM Chat CLI..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# Run the JAR with temperature parameter
-java -jar build/libs/simple-llm-sample-1.0-SNAPSHOT.jar --temperature "$TEMPERATURE"
+# Run the JAR with parameters
+java -jar build/libs/simple-llm-sample-1.0-SNAPSHOT.jar --temperature "$TEMPERATURE" --model "$MODEL"

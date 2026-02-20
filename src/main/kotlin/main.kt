@@ -51,19 +51,28 @@ suspend fun startInteractiveCli(apiKey: String, config: CliConfig) {
     // Create the prompt executor (reusable across agents)
     val promptExecutor = simpleOpenRouterExecutor(apiKey)
 
+    // Map the model string to the actual model constant
+    val llmModel = when (config.model) {
+        "gpt-4o-mini" -> OpenRouterModels.GPT4oMini
+        "mistral-7b" -> OpenRouterModels.Mistral7B
+        "qwen-2.5" -> OpenRouterModels.Qwen2_5
+        "gpt-4o" -> OpenRouterModels.GPT4o
+        else -> OpenRouterModels.GPT4oMini // default fallback
+    }
+
     // Create conversation manager with an agent factory
     // This creates a new agent instance for each message to avoid single-use constraint
     val conversationManager = ConversationManager {
         AIAgent(
             promptExecutor = promptExecutor,
             systemPrompt = config.systemPrompt,
-            llmModel = OpenRouterModels.GPT4oMini,
+            llmModel = llmModel,
             temperature = config.temperature
         )
     }
 
     // Print welcome message
-    printWelcome()
+    printWelcome(config)
 
     // Main REPL loop
     while (true) {
@@ -106,12 +115,15 @@ suspend fun startInteractiveCli(apiKey: String, config: CliConfig) {
             print("Assistant: ")
             print("Thinking...")
             
-            val response = conversationManager.sendMessage(input)
+            val stats = conversationManager.sendMessage(input)
             
             // Clear "Thinking..." and print response
             print("\r")
             print("Assistant: ")
-            println(response)
+            println(stats.response)
+            
+            // Print statistics
+            printRequestStatistics(stats)
         } catch (e: Exception) {
             println("\nError communicating with LLM: ${e.message}")
             println("Please try again or type /exit to quit.")
@@ -147,7 +159,15 @@ fun readMultilineInput(): String? {
     return lines.joinToString("\n").trim()
 }
 
-fun printWelcome() {
+fun printWelcome(config: CliConfig) {
+    val modelDisplayName = when (config.model) {
+        "gpt-4o-mini" -> "GPT-4o Mini"
+        "mistral-7b" -> "Mistral 7B Instruct"
+        "qwen-2.5" -> "Qwen 2.5 72B Instruct"
+        "gpt-4o" -> "GPT-4o"
+        else -> config.model
+    }
+    
     println(
         """
         
@@ -155,6 +175,9 @@ fun printWelcome() {
         ║         LLM Chat CLI                  ║
         ║  Powered by Koog & OpenRouter         ║
         ╚═══════════════════════════════════════╝
+        
+        Model: $modelDisplayName
+        Temperature: ${config.temperature}
         
         Type your message and press Enter twice to send.
         (First Enter = new line, Second Enter on empty line = send)
@@ -181,4 +204,17 @@ fun printInteractiveHelp() {
           - For single line, just press Enter twice
         """.trimIndent()
     )
+}
+
+fun printRequestStatistics(stats: RequestStatistics) {
+    val duration = if (stats.durationMs < 1000) {
+        "${stats.durationMs}ms"
+    } else {
+        String.format("%.2fs", stats.durationMs / 1000.0)
+    }
+    
+    println()
+    print("⏱️  Time: $duration")
+    
+    println()
 }
