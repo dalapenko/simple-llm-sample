@@ -24,7 +24,7 @@ tasks.test {
 }
 
 application {
-    mainClass.set("MainKt")
+    mainClass.set("llmchat.MainKt")
 }
 
 tasks.named<JavaExec>("run") {
@@ -33,7 +33,7 @@ tasks.named<JavaExec>("run") {
 
 tasks.named<Jar>("jar") {
     manifest {
-        attributes["Main-Class"] = "MainKt"
+        attributes["Main-Class"] = "llmchat.MainKt"
     }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })

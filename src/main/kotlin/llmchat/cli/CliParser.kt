@@ -1,22 +1,22 @@
-data class CliConfig(
-    val systemPrompt: String = "You are a helpful assistant. Answer user questions concisely.",
-    val temperature: Double = 1.0,
-    val model: String = "gpt-4o-mini",
-    val showHelp: Boolean = false
-)
+package llmchat.cli
 
+import llmchat.model.SupportedModel
+
+/**
+ * Parser for command-line arguments.
+ */
 object CliParser {
-    private val AVAILABLE_MODELS = mapOf(
-        "gpt-4o-mini" to "GPT4oMini",
-        "mistral-7b" to "Mistral7B",
-        "qwen-2.5" to "Qwen2_5",
-        "gpt-4o" to "GPT4o"
-    )
-
+    /**
+     * Parse command-line arguments into a configuration.
+     *
+     * @param args The command-line arguments
+     * @return The parsed configuration
+     * @throws IllegalArgumentException if arguments are invalid
+     */
     fun parse(args: Array<String>): CliConfig {
         var systemPrompt = "You are a helpful assistant. Answer user questions concisely."
         var temperature = 1.0
-        var model = "gpt-4o-mini"
+        var model = SupportedModel.default
         var showHelp = false
 
         var i = 0
@@ -52,10 +52,10 @@ object CliParser {
                 "--model" -> {
                     if (i + 1 < args.size) {
                         val requestedModel = args[i + 1]
-                        if (!AVAILABLE_MODELS.containsKey(requestedModel)) {
-                            throw IllegalArgumentException("--model must be one of: ${AVAILABLE_MODELS.keys.joinToString(", ")}")
-                        }
-                        model = requestedModel
+                        model = SupportedModel.fromCliName(requestedModel)
+                            ?: throw IllegalArgumentException(
+                                "--model must be one of: ${SupportedModel.availableNames.joinToString(", ")}"
+                            )
                         i += 2
                     } else {
                         throw IllegalArgumentException("--model requires an argument")
@@ -70,6 +70,9 @@ object CliParser {
         return CliConfig(systemPrompt, temperature, model, showHelp)
     }
 
+    /**
+     * Print help text to the console.
+     */
     fun printHelp() {
         println(
             """
@@ -82,12 +85,9 @@ object CliParser {
               --system-prompt "TEXT"    Custom system prompt for the assistant
               --temperature VALUE       Sampling temperature (0.0-2.0, default: 1.0)
                                         Lower = more deterministic, Higher = more random
-              --model MODEL             AI model to use (default: gpt-4o-mini)
+              --model MODEL             AI model to use (default: ${SupportedModel.default.cliName})
                                         Available models:
-                                          gpt-4o-mini  - GPT-4o Mini (default)
-                                          mistral-7b   - Mistral 7B Instruct
-                                          qwen-2.5     - Qwen 2.5 72B Instruct
-                                          gpt-4o       - GPT-4o
+${SupportedModel.entries.joinToString("\n") { "                                          ${it.cliName.padEnd(12)} - ${it.displayName}" }}
             
             Interactive Commands:
               /help       Show available commands
