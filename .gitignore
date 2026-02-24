@@ -40,3 +40,10 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+### LLM ###
+.beads
+.claude
+swarm-report
+AGENTS.md
+CLAUDE.md

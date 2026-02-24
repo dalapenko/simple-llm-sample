@@ -37,8 +37,9 @@ class ConversationManager(
             // Get response from agent
             val response = agent.run(userMessage)
 
-            // Store in history for future context
+            // Store in history for future context and persist to disk
             conversationHistory.add(userMessage to response)
+            ConversationStorage.save(conversationHistory)
 
             Result.success(RequestStatistics(response = response))
         } catch (e: Exception) {
@@ -105,6 +106,11 @@ class ConversationManager(
      */
     fun clearHistory() {
         conversationHistory.clear()
+        ConversationStorage.clear()
+    }
+
+    fun loadHistory(history: List<Pair<String, String>>) {
+        conversationHistory.addAll(history)
     }
 
     /**

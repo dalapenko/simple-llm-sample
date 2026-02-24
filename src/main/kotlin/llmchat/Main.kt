@@ -4,6 +4,7 @@ import ai.koog.agents.core.agent.AIAgent
 import ai.koog.prompt.executor.llms.all.simpleOpenRouterExecutor
 import kotlinx.coroutines.runBlocking
 import llmchat.agent.ConversationManager
+import llmchat.agent.ConversationStorage
 import llmchat.cli.CliParser
 import llmchat.cli.Command
 import llmchat.ui.CliOutput
@@ -77,6 +78,19 @@ suspend fun startInteractiveCli(apiKey: String, config: llmchat.cli.CliConfig) {
     
     // Set the base system prompt
     conversationManager.setBaseSystemPrompt(config.systemPrompt)
+
+    // Offer to restore previous session if one exists
+    if (ConversationStorage.hasHistory()) {
+        val count = ConversationStorage.size()
+        print("Found previous conversation ($count messages). Resume? [y/N]: ")
+        val answer = readlnOrNull()?.trim()?.lowercase()
+        if (answer == "y" || answer == "yes") {
+            conversationManager.loadHistory(ConversationStorage.load())
+            CliOutput.printInfo("Loaded $count messages from previous session.")
+        } else {
+            ConversationStorage.clear()
+        }
+    }
 
     // Print welcome message
     CliOutput.printWelcome(config)
