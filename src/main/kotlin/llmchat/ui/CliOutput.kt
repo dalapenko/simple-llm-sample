@@ -57,6 +57,13 @@ object CliOutput {
     }
 
     /**
+     * Print token usage statistics for the last request.
+     */
+    fun printTokenStats(inputTokens: Int, historyTokens: Int, responseTokens: Int, totalTokens: Int) {
+        println("\n[Tokens] request: ~$inputTokens | history: ~$historyTokens | response: ~$responseTokens | total: ~$totalTokens")
+    }
+
+    /**
      * Print a thinking indicator (before receiving response).
      */
     fun printThinkingIndicator() {

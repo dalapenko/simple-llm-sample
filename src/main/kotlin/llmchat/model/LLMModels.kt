@@ -1,7 +1,19 @@
 package llmchat.model
 
 import ai.koog.prompt.executor.clients.openrouter.OpenRouterModels
+import ai.koog.prompt.llm.LLMCapability
+import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
+
+private val Llama3_70B = LLModel(
+    provider = LLMProvider.OpenRouter,
+    id = "meta-llama/llama-3-70b-instruct",
+    capabilities = listOf(
+        LLMCapability.Temperature,
+        LLMCapability.Completion,
+    ),
+    contextLength = 8_192,
+)
 
 /**
  * Supported LLM models for the CLI application.
@@ -21,7 +33,8 @@ enum class SupportedModel(
     GPT4O_MINI("gpt-4o-mini", "GPT-4o Mini", OpenRouterModels.GPT4oMini),
     MISTRAL_7B("mistral-7b", "Mistral 7B Instruct", OpenRouterModels.Mistral7B),
     QWEN_2_5("qwen-2.5", "Qwen 2.5 72B Instruct", OpenRouterModels.Qwen2_5),
-    GPT4O("gpt-4o", "GPT-4o", OpenRouterModels.GPT4o);
+    GPT4O("gpt-4o", "GPT-4o", OpenRouterModels.GPT4o),
+    LLAMA3_70B("llama3-70b", "Llama 3 70B", Llama3_70B);
 
     companion object {
         /**

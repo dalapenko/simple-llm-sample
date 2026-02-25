@@ -149,6 +149,12 @@ suspend fun handleMessage(conversationManager: ConversationManager, message: Str
                 // Clear "Thinking..." and print response
                 CliOutput.clearThinkingIndicator()
                 println(stats.response)
+                CliOutput.printTokenStats(
+                    inputTokens = stats.inputTokens,
+                    historyTokens = stats.historyTokens,
+                    responseTokens = stats.responseTokens,
+                    totalTokens = stats.totalTokens
+                )
             },
             onFailure = { error ->
                 println() // Clear thinking indicator

@@ -34,14 +34,28 @@ class ConversationManager(
             // Create agent with enriched prompt
             val agent = agentFactory(enrichedSystemPrompt)
 
+            // Estimate token counts before the request
+            val inputTokens = TokenCounter.estimate(userMessage)
+            val historyTokens = conversationHistory.sumOf { (user, assistant) ->
+                TokenCounter.estimate(user) + TokenCounter.estimate(assistant)
+            }
+
             // Get response from agent
             val response = agent.run(userMessage)
+            val responseTokens = TokenCounter.estimate(response)
 
             // Store in history for future context and persist to disk
             conversationHistory.add(userMessage to response)
             ConversationStorage.save(conversationHistory)
 
-            Result.success(RequestStatistics(response = response))
+            Result.success(
+                RequestStatistics(
+                    response = response,
+                    inputTokens = inputTokens,
+                    historyTokens = historyTokens,
+                    responseTokens = responseTokens
+                )
+            )
         } catch (e: Exception) {
             Result.failure(e)
         }
