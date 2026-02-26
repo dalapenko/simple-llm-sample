@@ -1,5 +1,6 @@
 package llmchat.cli
 
+import llmchat.agent.ContextWindowConfig
 import llmchat.model.SupportedModel
 
 /**
@@ -17,6 +18,8 @@ object CliParser {
         var systemPrompt = "You are a helpful assistant. Answer user questions concisely."
         var temperature = 1.0
         var model = SupportedModel.default
+        var contextWindowSize = 10
+        var summaryBatchSize = 10
         var showHelp = false
 
         var i = 0
@@ -61,13 +64,35 @@ object CliParser {
                         throw IllegalArgumentException("--model requires an argument")
                     }
                 }
+                "--context-window" -> {
+                    if (i + 1 < args.size) {
+                        val n = args[i + 1].toIntOrNull()
+                            ?: throw IllegalArgumentException("--context-window must be a positive integer")
+                        if (n < 1) throw IllegalArgumentException("--context-window must be >= 1")
+                        contextWindowSize = n
+                        i += 2
+                    } else {
+                        throw IllegalArgumentException("--context-window requires an argument")
+                    }
+                }
+                "--summary-batch" -> {
+                    if (i + 1 < args.size) {
+                        val n = args[i + 1].toIntOrNull()
+                            ?: throw IllegalArgumentException("--summary-batch must be a positive integer")
+                        if (n < 1) throw IllegalArgumentException("--summary-batch must be >= 1")
+                        summaryBatchSize = n
+                        i += 2
+                    } else {
+                        throw IllegalArgumentException("--summary-batch requires an argument")
+                    }
+                }
                 else -> {
                     throw IllegalArgumentException("Unknown argument: ${args[i]}")
                 }
             }
         }
 
-        return CliConfig(systemPrompt, temperature, model, showHelp)
+        return CliConfig(systemPrompt, temperature, model, ContextWindowConfig(contextWindowSize, summaryBatchSize), showHelp)
     }
 
     /**
@@ -85,6 +110,8 @@ object CliParser {
               --system-prompt "TEXT"    Custom system prompt for the assistant
               --temperature VALUE       Sampling temperature (0.0-2.0, default: 1.0)
                                         Lower = more deterministic, Higher = more random
+              --context-window N        Keep last N messages verbatim (default: 10)
+              --summary-batch N         Summarize old messages in batches of N (default: 10)
               --model MODEL             AI model to use (default: ${SupportedModel.default.cliName})
                                         Available models:
 ${SupportedModel.entries.joinToString("\n") { "                                          ${it.cliName.padEnd(12)} - ${it.displayName}" }}

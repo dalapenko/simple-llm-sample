@@ -67,14 +67,17 @@ suspend fun startInteractiveCli(apiKey: String, config: llmchat.cli.CliConfig) {
     val promptExecutor = simpleOpenRouterExecutor(apiKey)
 
     // Create conversation manager with agent factory
-    val conversationManager = ConversationManager { systemPrompt ->
-        AIAgent(
-            promptExecutor = promptExecutor,
-            systemPrompt = systemPrompt,
-            llmModel = config.model.openRouterModel,
-            temperature = config.temperature
-        )
-    }
+    val conversationManager = ConversationManager(
+        agentFactory = { systemPrompt ->
+            AIAgent(
+                promptExecutor = promptExecutor,
+                systemPrompt = systemPrompt,
+                llmModel = config.model.openRouterModel,
+                temperature = config.temperature
+            )
+        },
+        contextConfig = config.contextWindow
+    )
     
     // Set the base system prompt
     conversationManager.setBaseSystemPrompt(config.systemPrompt)
@@ -82,11 +85,13 @@ suspend fun startInteractiveCli(apiKey: String, config: llmchat.cli.CliConfig) {
     // Offer to restore previous session if one exists
     if (ConversationStorage.hasHistory()) {
         val count = ConversationStorage.size()
-        print("Found previous conversation ($count messages). Resume? [y/N]: ")
+        val loadedSummaries = ConversationStorage.loadSummaries()
+        val summaryNote = if (loadedSummaries.isNotEmpty()) " + ${loadedSummaries.size} summary batch(es)" else ""
+        print("Found previous conversation ($count messages$summaryNote). Resume? [y/N]: ")
         val answer = readlnOrNull()?.trim()?.lowercase()
         if (answer == "y" || answer == "yes") {
-            conversationManager.loadHistory(ConversationStorage.load())
-            CliOutput.printInfo("Loaded $count messages from previous session.")
+            conversationManager.loadHistory(ConversationStorage.loadRecentTurns(), loadedSummaries)
+            CliOutput.printInfo("Loaded $count messages${summaryNote.replace(" +", " and")} from previous session.")
         } else {
             ConversationStorage.clear()
         }
@@ -151,7 +156,8 @@ suspend fun handleMessage(conversationManager: ConversationManager, message: Str
                 println(stats.response)
                 CliOutput.printTokenStats(
                     inputTokens = stats.inputTokens,
-                    historyTokens = stats.historyTokens,
+                    windowTokens = stats.windowTokens,
+                    summaryTokens = stats.summaryTokens,
                     responseTokens = stats.responseTokens,
                     totalTokens = stats.totalTokens
                 )

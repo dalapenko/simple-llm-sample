@@ -59,8 +59,8 @@ object CliOutput {
     /**
      * Print token usage statistics for the last request.
      */
-    fun printTokenStats(inputTokens: Int, historyTokens: Int, responseTokens: Int, totalTokens: Int) {
-        println("\n[Tokens] request: ~$inputTokens | history: ~$historyTokens | response: ~$responseTokens | total: ~$totalTokens")
+    fun printTokenStats(inputTokens: Int, windowTokens: Int, summaryTokens: Int, responseTokens: Int, totalTokens: Int) {
+        println("\n[Tokens] request: ~$inputTokens | window: ~$windowTokens | summaries: ~$summaryTokens | response: ~$responseTokens | total: ~$totalTokens")
     }
 
     /**
