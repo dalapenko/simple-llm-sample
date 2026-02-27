@@ -51,7 +51,8 @@ object ConversationStorage {
 
     fun hasHistory(): Boolean {
         val hasHistory = historyFile.exists() && historyFile.readText().trim().let { it.isNotBlank() && it != "[]" }
-        val hasSummaries = summariesFile.exists() && summariesFile.readText().trim().let { it.isNotBlank() && it != "[]" }
+        val hasSummaries =
+            summariesFile.exists() && summariesFile.readText().trim().let { it.isNotBlank() && it != "[]" }
         return hasHistory || hasSummaries
     }
 }

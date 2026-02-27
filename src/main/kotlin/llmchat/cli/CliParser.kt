@@ -29,6 +29,7 @@ object CliParser {
                     showHelp = true
                     i++
                 }
+
                 "--system-prompt" -> {
                     if (i + 1 < args.size) {
                         systemPrompt = args[i + 1]
@@ -37,6 +38,7 @@ object CliParser {
                         throw IllegalArgumentException("--system-prompt requires an argument")
                     }
                 }
+
                 "--temperature" -> {
                     if (i + 1 < args.size) {
                         try {
@@ -44,7 +46,7 @@ object CliParser {
                             if (temperature !in 0.0..2.0) {
                                 throw IllegalArgumentException("--temperature must be between 0.0 and 2.0")
                             }
-                        } catch (e: NumberFormatException) {
+                        } catch (_: NumberFormatException) {
                             throw IllegalArgumentException("--temperature must be a valid number")
                         }
                         i += 2
@@ -52,6 +54,7 @@ object CliParser {
                         throw IllegalArgumentException("--temperature requires an argument")
                     }
                 }
+
                 "--model" -> {
                     if (i + 1 < args.size) {
                         val requestedModel = args[i + 1]
@@ -64,6 +67,7 @@ object CliParser {
                         throw IllegalArgumentException("--model requires an argument")
                     }
                 }
+
                 "--context-window" -> {
                     if (i + 1 < args.size) {
                         val n = args[i + 1].toIntOrNull()
@@ -75,6 +79,7 @@ object CliParser {
                         throw IllegalArgumentException("--context-window requires an argument")
                     }
                 }
+
                 "--summary-batch" -> {
                     if (i + 1 < args.size) {
                         val n = args[i + 1].toIntOrNull()
@@ -86,13 +91,20 @@ object CliParser {
                         throw IllegalArgumentException("--summary-batch requires an argument")
                     }
                 }
+
                 else -> {
                     throw IllegalArgumentException("Unknown argument: ${args[i]}")
                 }
             }
         }
 
-        return CliConfig(systemPrompt, temperature, model, ContextWindowConfig(contextWindowSize, summaryBatchSize), showHelp)
+        return CliConfig(
+            systemPrompt,
+            temperature,
+            model,
+            ContextWindowConfig(contextWindowSize, summaryBatchSize),
+            showHelp
+        )
     }
 
     /**

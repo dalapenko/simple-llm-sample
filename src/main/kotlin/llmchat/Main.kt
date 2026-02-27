@@ -78,7 +78,7 @@ suspend fun startInteractiveCli(apiKey: String, config: llmchat.cli.CliConfig) {
         },
         contextConfig = config.contextWindow
     )
-    
+
     // Set the base system prompt
     conversationManager.setBaseSystemPrompt(config.systemPrompt)
 
@@ -116,20 +116,25 @@ suspend fun startInteractiveCli(apiKey: String, config: llmchat.cli.CliConfig) {
                 CliOutput.printGoodbye()
                 break
             }
+
             is Command.Help -> {
                 CliOutput.printInteractiveHelp()
             }
+
             is Command.Clear -> {
                 conversationManager.clearHistory()
                 CliOutput.printInfo("Conversation history cleared.")
             }
+
             is Command.History -> {
                 conversationManager.displayHistory()
             }
+
             is Command.Unknown -> {
                 CliOutput.printError("Unknown command: ${command.input}")
                 println("Type /help for available commands.")
             }
+
             is Command.Message -> {
                 handleMessage(conversationManager, command.content)
             }
