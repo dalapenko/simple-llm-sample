@@ -1,64 +1,72 @@
 package llmchat.ui
 
+import llmchat.agent.context.Branch
+import llmchat.agent.context.Checkpoint
 import llmchat.cli.CliConfig
+import llmchat.cli.StrategyType
 
-/**
- * Handles all CLI output and formatting.
- *
- * This object centralizes all user-facing output, including welcome messages,
- * help text, and error messages.
- */
 object CliOutput {
-    /**
-     * Print the welcome message with current configuration.
-     *
-     * @param config The CLI configuration to display
-     */
+
     fun printWelcome(config: CliConfig) {
         println(
             """
-        
+
         ╔═══════════════════════════════════════╗
         ║         LLM Chat CLI                  ║
         ║  Powered by Koog & OpenRouter         ║
         ╚═══════════════════════════════════════╝
-        
+
         Model: ${config.model.displayName}
         Temperature: ${config.temperature}
-        
+        Strategy: ${config.strategyType.displayName}
+
         Type your message and press Enter twice to send.
-        (First Enter = new line, Second Enter on empty line = send)
-        Commands: /help, /clear, /history, /exit
-        
+        Commands: /help, /clear, /history, /strategy, /exit
+
         """.trimIndent()
         )
     }
 
-    /**
-     * Print the interactive help message.
-     */
-    fun printInteractiveHelp() {
+    fun printInteractiveHelp(strategyType: StrategyType) {
+        val strategyCommands = when (strategyType) {
+            StrategyType.STICKY_FACTS -> """
+          /facts              Show the current facts map
+          /facts set K V      Manually set fact K to value V
+          /facts delete K     Remove fact K"""
+
+            StrategyType.BRANCHING -> """
+          /branch list                     List all branches
+          /branch new <name>               Fork current state into a new branch
+          /branch new <name> from <cp>     Fork from a saved checkpoint
+          /branch switch <name>            Switch active branch
+          /checkpoint list                 List saved checkpoints
+          /checkpoint save <name>          Save checkpoint at current position"""
+
+            else -> ""
+        }
+
         println(
             """
-        
+
         Available Commands:
-          /help       Show this help message
-          /clear      Clear conversation history
-          /history    Show conversation history
-          /exit       Exit the application
-          /quit       Exit the application
-        
+          /help               Show this help message
+          /clear              Clear conversation history
+          /history            Show conversation history
+          /strategy           Show current context strategy
+          /exit, /quit        Exit the application
+        ${if (strategyCommands.isNotEmpty()) "\n        Strategy-specific (${strategyType.cliName}):\n$strategyCommands" else ""}
+
         How to use:
           - Type your message (can be multiple lines)
           - Press Enter twice (empty line) to send
-          - For single line, just press Enter twice
         """.trimIndent()
         )
     }
 
-    /**
-     * Print token usage statistics for the last request.
-     */
+    fun printStrategyInfo(strategyType: StrategyType) {
+        println("\nActive strategy: ${strategyType.displayName} (${strategyType.cliName})")
+    }
+
     fun printTokenStats(
         inputTokens: Int,
         windowTokens: Int,
@@ -66,45 +74,68 @@ object CliOutput {
         responseTokens: Int,
         totalTokens: Int
     ) {
-        println("\n[Tokens] request: ~$inputTokens | window: ~$windowTokens | summaries: ~$summaryTokens | response: ~$responseTokens | total: ~$totalTokens")
+        val secondaryLabel = if (summaryTokens > 0) " | facts: ~$summaryTokens" else ""
+        println("\n[Tokens] request: ~$inputTokens | window: ~$windowTokens$secondaryLabel | response: ~$responseTokens | total: ~$totalTokens")
     }
 
-    /**
-     * Print a thinking indicator (before receiving response).
-     */
+    // ── Branch display ─────────────────────────────────────────────────────────
+
+    fun printBranchList(branches: List<Branch>, currentBranchName: String) {
+        println("\n=== Branches ===")
+        if (branches.isEmpty()) {
+            println("  (none)")
+        } else {
+            branches.forEach { branch ->
+                val marker = if (branch.name == currentBranchName) " ◀ current" else ""
+                println("  ${branch.name.padEnd(20)} ${branch.messages.size} exchanges$marker")
+            }
+        }
+        println("================\n")
+    }
+
+    fun printCheckpointList(checkpoints: List<Checkpoint>) {
+        println("\n=== Checkpoints ===")
+        if (checkpoints.isEmpty()) {
+            println("  (none saved yet — use /checkpoint save <name>)")
+        } else {
+            checkpoints.forEach { cp ->
+                println("  ${cp.name.padEnd(20)} branch=${cp.branchId}, at message ${cp.messageCount}")
+            }
+        }
+        println("===================\n")
+    }
+
+    // ── Facts display ──────────────────────────────────────────────────────────
+
+    fun printFacts(facts: Map<String, String>) {
+        println("\n=== Facts ===")
+        if (facts.isEmpty()) {
+            println("  (no facts extracted yet — start chatting to populate)")
+        } else {
+            facts.forEach { (k, v) -> println("  $k = $v") }
+        }
+        println("=============\n")
+    }
+
+    // ── Standard messages ──────────────────────────────────────────────────────
+
     fun printThinkingIndicator() {
         print("Assistant: Thinking...")
     }
 
-    /**
-     * Clear the thinking indicator and prepare for response.
-     */
     fun clearThinkingIndicator() {
         print("\r")
         print("Assistant: ")
     }
 
-    /**
-     * Print an error message.
-     *
-     * @param message The error message to display
-     */
     fun printError(message: String) {
         println("Error: $message")
     }
 
-    /**
-     * Print a general informational message.
-     *
-     * @param message The message to display
-     */
     fun printInfo(message: String) {
         println(message)
     }
 
-    /**
-     * Print the goodbye message.
-     */
     fun printGoodbye() {
         println("Goodbye!")
     }

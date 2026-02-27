@@ -8,5 +8,6 @@ data class CliConfig(
     val temperature: Double = 1.0,
     val model: SupportedModel = SupportedModel.default,
     val contextWindow: ContextWindowConfig = ContextWindowConfig(),
+    val strategyType: StrategyType = StrategyType.default,
     val showHelp: Boolean = false
 )

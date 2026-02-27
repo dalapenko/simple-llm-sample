@@ -20,6 +20,7 @@ object CliParser {
         var model = SupportedModel.default
         var contextWindowSize = 10
         var summaryBatchSize = 10
+        var strategyType = StrategyType.default
         var showHelp = false
 
         var i = 0
@@ -92,6 +93,19 @@ object CliParser {
                     }
                 }
 
+                "--strategy" -> {
+                    if (i + 1 < args.size) {
+                        val name = args[i + 1]
+                        strategyType = StrategyType.fromCliName(name)
+                            ?: throw IllegalArgumentException(
+                                "--strategy must be one of: ${StrategyType.availableNames.joinToString(", ")}"
+                            )
+                        i += 2
+                    } else {
+                        throw IllegalArgumentException("--strategy requires an argument")
+                    }
+                }
+
                 else -> {
                     throw IllegalArgumentException("Unknown argument: ${args[i]}")
                 }
@@ -103,6 +117,7 @@ object CliParser {
             temperature,
             model,
             ContextWindowConfig(contextWindowSize, summaryBatchSize),
+            strategyType,
             showHelp
         )
     }
@@ -122,8 +137,11 @@ object CliParser {
               --system-prompt "TEXT"    Custom system prompt for the assistant
               --temperature VALUE       Sampling temperature (0.0-2.0, default: 1.0)
                                         Lower = more deterministic, Higher = more random
-              --context-window N        Keep last N messages verbatim (default: 10)
-              --summary-batch N         Summarize old messages in batches of N (default: 10)
+              --context-window N        Keep last N messages in the window (default: 10)
+              --summary-batch N         (legacy, only used without --strategy)
+              --strategy STRATEGY       Context strategy (default: ${StrategyType.default.cliName})
+                                        Available strategies:
+${StrategyType.entries.joinToString("\n") { "                                          ${it.cliName.padEnd(16)} - ${it.displayName}" }}
               --model MODEL             AI model to use (default: ${SupportedModel.default.cliName})
                                         Available models:
 ${SupportedModel.entries.joinToString("\n") { "                                          ${it.cliName.padEnd(12)} - ${it.displayName}" }}
