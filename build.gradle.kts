@@ -2,6 +2,7 @@ plugins {
     kotlin("jvm") version "2.3.0"
     kotlin("plugin.serialization") version "2.3.0"
     application
+    id("com.gradleup.shadow") version "9.0.0-beta12"
 }
 
 group = "org.example"
@@ -14,6 +15,15 @@ repositories {
 dependencies {
     implementation("ai.koog:koog-agents:0.6.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
+
+    // TUI: colored output, animated spinner
+    implementation("com.github.ajalt.mordant:mordant:3.0.2")
+    // TUI: markdown rendering in terminal
+    implementation("com.github.ajalt.mordant:mordant-markdown:3.0.2")
+
+    // TUI: line editing, history, tab completion
+    implementation("org.jline:jline:3.28.0")
+
     testImplementation(kotlin("test"))
 }
 
@@ -31,12 +41,4 @@ application {
 
 tasks.named<JavaExec>("run") {
     standardInput = System.`in`
-}
-
-tasks.named<Jar>("jar") {
-    manifest {
-        attributes["Main-Class"] = "llmchat.MainKt"
-    }
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
 }

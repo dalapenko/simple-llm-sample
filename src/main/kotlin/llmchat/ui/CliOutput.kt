@@ -1,70 +1,87 @@
 package llmchat.ui
 
+import com.github.ajalt.mordant.markdown.Markdown
+import com.github.ajalt.mordant.rendering.TextColors.blue
+import com.github.ajalt.mordant.rendering.TextColors.cyan
+import com.github.ajalt.mordant.rendering.TextColors.green
+import com.github.ajalt.mordant.rendering.TextColors.red
+import com.github.ajalt.mordant.rendering.TextColors.yellow
+import com.github.ajalt.mordant.rendering.TextStyles.bold
+import com.github.ajalt.mordant.rendering.TextStyles.dim
+import com.github.ajalt.mordant.terminal.Terminal
 import llmchat.agent.context.Branch
 import llmchat.agent.context.Checkpoint
 import llmchat.cli.CliConfig
 import llmchat.cli.StrategyType
 
-object CliOutput {
+class CliOutput(private val terminal: Terminal) {
 
     fun printWelcome(config: CliConfig) {
-        println(
-            """
-
-        ╔═══════════════════════════════════════╗
-        ║         LLM Chat CLI                  ║
-        ║  Powered by Koog & OpenRouter         ║
-        ╚═══════════════════════════════════════╝
-
-        Model: ${config.model.displayName}
-        Temperature: ${config.temperature}
-        Strategy: ${config.strategyType.displayName}
-
-        Type your message and press Enter twice to send.
-        Commands: /help, /clear, /history, /strategy, /exit
-
-        """.trimIndent()
+        terminal.println()
+        terminal.println(
+            bold(" LLM Chat") + dim(" | ") +
+            cyan(config.model.displayName) + dim(" | ") +
+            config.strategyType.cliName + dim(" | ") +
+            dim("/help for commands")
         )
+        terminal.println(dim("─".repeat(72)))
+        terminal.println()
     }
 
     fun printInteractiveHelp(strategyType: StrategyType) {
-        val strategyCommands = when (strategyType) {
-            StrategyType.STICKY_FACTS -> """
-          /facts              Show the current facts map
-          /facts set K V      Manually set fact K to value V
-          /facts delete K     Remove fact K"""
-
-            StrategyType.BRANCHING -> """
-          /branch list                     List all branches
-          /branch new <name>               Fork current state into a new branch
-          /branch new <name> from <cp>     Fork from a saved checkpoint
-          /branch switch <name>            Switch active branch
-          /checkpoint list                 List saved checkpoints
-          /checkpoint save <name>          Save checkpoint at current position"""
-
-            else -> ""
+        terminal.println()
+        terminal.println(bold("Commands:"))
+        listOf(
+            "/help" to "Show this help",
+            "/clear" to "Clear conversation history",
+            "/history" to "Show conversation history",
+            "/strategy" to "Show active context strategy",
+            "/exit, /quit" to "Exit the application"
+        ).forEach { (cmd, desc) ->
+            terminal.println("  ${cyan(cmd.padEnd(22))} $desc")
         }
 
-        println(
-            """
+        val extra: List<Pair<String, String>> = when (strategyType) {
+            StrategyType.STICKY_FACTS -> listOf(
+                "/facts" to "Show current facts map",
+                "/facts set K V" to "Set fact K to value V",
+                "/facts delete K" to "Remove fact K"
+            )
+            StrategyType.BRANCHING -> listOf(
+                "/branch list" to "List all branches",
+                "/branch new <name>" to "Fork current state into a new branch",
+                "/branch new <name> from <cp>" to "Fork from a saved checkpoint",
+                "/branch switch <name>" to "Switch active branch",
+                "/checkpoint list" to "List saved checkpoints",
+                "/checkpoint save <name>" to "Save checkpoint at current position"
+            )
+            else -> emptyList()
+        }
 
-        Available Commands:
-          /help               Show this help message
-          /clear              Clear conversation history
-          /history            Show conversation history
-          /strategy           Show current context strategy
-          /exit, /quit        Exit the application
-        ${if (strategyCommands.isNotEmpty()) "\n        Strategy-specific (${strategyType.cliName}):\n$strategyCommands" else ""}
+        if (extra.isNotEmpty()) {
+            terminal.println()
+            terminal.println(bold("Strategy-specific (${strategyType.cliName}):"))
+            extra.forEach { (cmd, desc) ->
+                terminal.println("  ${cyan(cmd.padEnd(38))} $desc")
+            }
+        }
 
-        How to use:
-          - Type your message (can be multiple lines)
-          - Press Enter twice (empty line) to send
-        """.trimIndent()
-        )
+        terminal.println()
+        terminal.println(dim("Tip: press \\ at end of line for multi-line input. Tab completes commands."))
+        terminal.println()
     }
 
     fun printStrategyInfo(strategyType: StrategyType) {
-        println("\nActive strategy: ${strategyType.displayName} (${strategyType.cliName})")
+        terminal.println()
+        terminal.println(dim("Active strategy: ") + cyan(strategyType.displayName) + dim(" (${strategyType.cliName})"))
+        terminal.println()
+    }
+
+    fun printAssistantResponse(rawResponse: String) {
+        val sanitized = AnsiSanitizer.strip(rawResponse)
+        terminal.println()
+        terminal.println(blue(bold(" AI")))
+        terminal.println(Markdown(sanitized))
     }
 
     fun printTokenStats(
@@ -74,69 +91,94 @@ object CliOutput {
         responseTokens: Int,
         totalTokens: Int
     ) {
-        val secondaryLabel = if (summaryTokens > 0) " | facts: ~$summaryTokens" else ""
-        println("\n[Tokens] request: ~$inputTokens | window: ~$windowTokens$secondaryLabel | response: ~$responseTokens | total: ~$totalTokens")
+        val parts = mutableListOf(
+            "in: ~$inputTokens",
+            "ctx: ~$windowTokens"
+        )
+        if (summaryTokens > 0) parts.add("facts: ~$summaryTokens")
+        parts.add("out: ~$responseTokens")
+        parts.add("total: ~$totalTokens")
+        terminal.println(dim("   [${parts.joinToString(" | ")}]"))
+        terminal.println()
     }
 
-    // ── Branch display ─────────────────────────────────────────────────────────
-
     fun printBranchList(branches: List<Branch>, currentBranchName: String) {
-        println("\n=== Branches ===")
+        terminal.println()
+        terminal.println(bold(" Branches"))
+        terminal.println(dim("─".repeat(40)))
         if (branches.isEmpty()) {
-            println("  (none)")
+            terminal.println(dim("  (none)"))
         } else {
             branches.forEach { branch ->
-                val marker = if (branch.name == currentBranchName) " ◀ current" else ""
-                println("  ${branch.name.padEnd(20)} ${branch.messages.size} exchanges$marker")
+                val marker = if (branch.name == currentBranchName) "  " + green("◀ current") else ""
+                terminal.println("  ${cyan(branch.name.padEnd(20))} ${dim("${branch.messages.size} exchanges")}$marker")
             }
         }
-        println("================\n")
+        terminal.println(dim("─".repeat(40)))
+        terminal.println()
     }
 
     fun printCheckpointList(checkpoints: List<Checkpoint>) {
-        println("\n=== Checkpoints ===")
+        terminal.println()
+        terminal.println(bold(" Checkpoints"))
+        terminal.println(dim("─".repeat(40)))
         if (checkpoints.isEmpty()) {
-            println("  (none saved yet — use /checkpoint save <name>)")
+            terminal.println(dim("  (none saved yet — use /checkpoint save <name>)"))
         } else {
             checkpoints.forEach { cp ->
-                println("  ${cp.name.padEnd(20)} branch=${cp.branchId}, at message ${cp.messageCount}")
+                terminal.println(
+                    "  ${cyan(cp.name.padEnd(20))} ${dim("branch=${cp.branchId}, msg ${cp.messageCount}")}"
+                )
             }
         }
-        println("===================\n")
+        terminal.println(dim("─".repeat(40)))
+        terminal.println()
     }
-
-    // ── Facts display ──────────────────────────────────────────────────────────
 
     fun printFacts(facts: Map<String, String>) {
-        println("\n=== Facts ===")
+        terminal.println()
+        terminal.println(bold(" Facts"))
+        terminal.println(dim("─".repeat(40)))
         if (facts.isEmpty()) {
-            println("  (no facts extracted yet — start chatting to populate)")
+            terminal.println(dim("  (no facts extracted yet — start chatting to populate)"))
         } else {
-            facts.forEach { (k, v) -> println("  $k = $v") }
+            facts.forEach { (k, v) ->
+                terminal.println("  ${cyan(k)} ${dim("=")} $v")
+            }
         }
-        println("=============\n")
-    }
-
-    // ── Standard messages ──────────────────────────────────────────────────────
-
-    fun printThinkingIndicator() {
-        print("Assistant: Thinking...")
-    }
-
-    fun clearThinkingIndicator() {
-        print("\r")
-        print("Assistant: ")
+        terminal.println(dim("─".repeat(40)))
+        terminal.println()
     }
 
     fun printError(message: String) {
-        println("Error: $message")
+        terminal.println(red(bold(" ERROR ")) + red(message))
     }
 
     fun printInfo(message: String) {
-        println(message)
+        terminal.println(dim("  $message"))
     }
 
     fun printGoodbye() {
-        println("Goodbye!")
+        terminal.println()
+        terminal.println(dim("Goodbye!"))
     }
+
+    /**
+     * Build the styled ANSI prompt string passed to JLine's readLine().
+     * JLine renders raw ANSI codes so Mordant color functions work directly here.
+     */
+    fun buildPrompt(branchName: String? = null): String {
+        val branch = if (branchName != null) {
+            "${dim("[") + cyan(branchName) + dim("]")} "
+        } else ""
+        return "\n ${branch}${cyan(bold("You"))} ${dim(">")} "
+    }
+
+    // ── Legacy stubs (kept for backward compatibility during transition) ────────
+
+    /** @deprecated Use ThinkingSpinner instead */
+    fun printThinkingIndicator() {}
+
+    /** @deprecated Use ThinkingSpinner instead */
+    fun clearThinkingIndicator() {}
 }

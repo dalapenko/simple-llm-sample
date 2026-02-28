@@ -78,4 +78,4 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # Run the JAR with parameters
-java -jar build/libs/simple-llm-sample-1.0-SNAPSHOT.jar --temperature "$TEMPERATURE" --model "$MODEL"
+java -jar build/libs/simple-llm-sample-1.0-SNAPSHOT-all.jar --temperature "$TEMPERATURE" --model "$MODEL"

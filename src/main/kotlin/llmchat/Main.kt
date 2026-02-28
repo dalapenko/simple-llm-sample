@@ -2,6 +2,8 @@ package llmchat
 
 import ai.koog.agents.core.agent.AIAgent
 import ai.koog.prompt.executor.llms.all.simpleOpenRouterExecutor
+import com.github.ajalt.mordant.terminal.Terminal
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.runBlocking
 import llmchat.agent.ConversationManager
 import llmchat.agent.ConversationStorage
@@ -12,16 +14,21 @@ import llmchat.agent.context.StickyFactsStrategy
 import llmchat.cli.CliParser
 import llmchat.cli.Command
 import llmchat.cli.StrategyType
+import llmchat.ui.ChatInputReader
 import llmchat.ui.CliOutput
+import llmchat.ui.ThinkingSpinner
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
+    val terminal = Terminal()
+    val output = CliOutput(terminal)
+
     try {
         val config = try {
             CliParser.parse(args)
         } catch (e: IllegalArgumentException) {
-            CliOutput.printError(e.message ?: "Invalid arguments")
-            println()
+            output.printError(e.message ?: "Invalid arguments")
+            terminal.println()
             CliParser.printHelp()
             exitProcess(1)
         }
@@ -33,24 +40,34 @@ fun main(args: Array<String>) {
 
         val apiKey = System.getenv("OPENROUTER_API_KEY")
         if (apiKey.isNullOrBlank()) {
-            CliOutput.printError("OPENROUTER_API_KEY environment variable is not set.")
-            println("Please set your OpenRouter API key:")
-            println("  export OPENROUTER_API_KEY='your-api-key-here'")
+            output.printError("OPENROUTER_API_KEY environment variable is not set.")
+            terminal.println("Please set your OpenRouter API key:")
+            terminal.println("  export OPENROUTER_API_KEY='your-api-key-here'")
             exitProcess(1)
         }
 
         runBlocking {
-            startInteractiveCli(apiKey, config)
+            startInteractiveCli(apiKey, config, output, terminal, this)
         }
     } catch (e: Exception) {
-        println("Fatal error: ${e.message}")
+        output.printError("Fatal error: ${e.message}")
         e.printStackTrace()
         exitProcess(1)
     }
 }
 
-suspend fun startInteractiveCli(apiKey: String, config: llmchat.cli.CliConfig) {
+suspend fun startInteractiveCli(
+    apiKey: String,
+    config: llmchat.cli.CliConfig,
+    output: CliOutput,
+    terminal: Terminal,
+    scope: CoroutineScope
+) {
+    val inputReader = ChatInputReader(config.strategyType)
+    val spinner = ThinkingSpinner(terminal)
+
     Runtime.getRuntime().addShutdownHook(Thread {
+        inputReader.close()
         println("\nGoodbye!")
     })
 
@@ -85,72 +102,71 @@ suspend fun startInteractiveCli(apiKey: String, config: llmchat.cli.CliConfig) {
     )
     conversationManager.setBaseSystemPrompt(config.systemPrompt)
 
-    // Session restore — only applicable for SlidingWindow (linear history)
+    // Session restore — only for SlidingWindow (linear history)
     if (strategy is SlidingWindowStrategy && ConversationStorage.hasHistory()) {
         val count = ConversationStorage.size()
-        print("Found previous conversation ($count messages). Resume? [y/N]: ")
-        val answer = readlnOrNull()?.trim()?.lowercase()
+        val answer = inputReader.readInput(
+            terminal.theme.style("prompt")(" Found previous conversation ($count messages). Resume? [y/N]: ")
+                .ifEmpty { " Found previous conversation ($count messages). Resume? [y/N]: " }
+        )?.trim()?.lowercase()
         if (answer == "y" || answer == "yes") {
             conversationManager.loadInitialMessages(ConversationStorage.loadRecentTurns())
-            CliOutput.printInfo("Loaded $count messages from previous session.")
+            output.printInfo("Loaded $count messages from previous session.")
         } else {
             ConversationStorage.clear()
         }
     }
 
-    CliOutput.printWelcome(config)
+    output.printWelcome(config)
 
     while (true) {
-        val prompt = when (strategy) {
-            is BranchingStrategy -> "\n[${strategy.currentBranchName()}] You: "
-            else -> "\nYou: "
-        }
-        print(prompt)
+        val branchName = (strategy as? BranchingStrategy)?.currentBranchName()
+        val prompt = output.buildPrompt(branchName)
 
-        val input = readMultilineInput() ?: break
+        val input = inputReader.readInput(prompt) ?: break
         if (input.isEmpty()) continue
 
         when (val command = Command.parse(input)) {
             is Command.Exit -> {
-                CliOutput.printGoodbye()
+                output.printGoodbye()
                 break
             }
 
-            is Command.Help -> CliOutput.printInteractiveHelp(config.strategyType)
+            is Command.Help -> output.printInteractiveHelp(config.strategyType)
 
             is Command.Clear -> {
                 conversationManager.clearHistory()
-                CliOutput.printInfo("Conversation history cleared.")
+                output.printInfo("Conversation history cleared.")
             }
 
             is Command.History -> conversationManager.displayHistory()
 
-            is Command.StrategyInfo -> CliOutput.printStrategyInfo(config.strategyType)
+            is Command.StrategyInfo -> output.printStrategyInfo(config.strategyType)
 
             // ── Branch commands ────────────────────────────────────────────
 
             is Command.BranchList -> {
                 val bs = strategy as? BranchingStrategy
                 if (bs == null) {
-                    CliOutput.printError("Branch commands require --strategy branching")
+                    output.printError("Branch commands require --strategy branching")
                 } else {
-                    CliOutput.printBranchList(bs.listBranches(), bs.currentBranchName())
+                    output.printBranchList(bs.listBranches(), bs.currentBranchName())
                 }
             }
 
             is Command.BranchNew -> {
                 val bs = strategy as? BranchingStrategy
                 if (bs == null) {
-                    CliOutput.printError("Branch commands require --strategy branching")
+                    output.printError("Branch commands require --strategy branching")
                 } else {
                     try {
                         val branch = bs.createBranch(command.name, command.fromCheckpoint)
-                        CliOutput.printInfo(
+                        output.printInfo(
                             "Created and switched to branch '${branch.name}'" +
                                     (if (command.fromCheckpoint != null) " (forked from checkpoint '${command.fromCheckpoint}')" else " (forked from current state)")
                         )
                     } catch (e: IllegalArgumentException) {
-                        CliOutput.printError(e.message ?: "Failed to create branch")
+                        output.printError(e.message ?: "Failed to create branch")
                     }
                 }
             }
@@ -158,13 +174,13 @@ suspend fun startInteractiveCli(apiKey: String, config: llmchat.cli.CliConfig) {
             is Command.BranchSwitch -> {
                 val bs = strategy as? BranchingStrategy
                 if (bs == null) {
-                    CliOutput.printError("Branch commands require --strategy branching")
+                    output.printError("Branch commands require --strategy branching")
                 } else {
                     try {
                         val branch = bs.switchBranch(command.name)
-                        CliOutput.printInfo("Switched to branch '${branch.name}' (${branch.messages.size} exchanges)")
+                        output.printInfo("Switched to branch '${branch.name}' (${branch.messages.size} exchanges)")
                     } catch (e: IllegalArgumentException) {
-                        CliOutput.printError(e.message ?: "Failed to switch branch")
+                        output.printError(e.message ?: "Failed to switch branch")
                     }
                 }
             }
@@ -174,19 +190,19 @@ suspend fun startInteractiveCli(apiKey: String, config: llmchat.cli.CliConfig) {
             is Command.CheckpointList -> {
                 val bs = strategy as? BranchingStrategy
                 if (bs == null) {
-                    CliOutput.printError("Checkpoint commands require --strategy branching")
+                    output.printError("Checkpoint commands require --strategy branching")
                 } else {
-                    CliOutput.printCheckpointList(bs.listCheckpoints())
+                    output.printCheckpointList(bs.listCheckpoints())
                 }
             }
 
             is Command.CheckpointSave -> {
                 val bs = strategy as? BranchingStrategy
                 if (bs == null) {
-                    CliOutput.printError("Checkpoint commands require --strategy branching")
+                    output.printError("Checkpoint commands require --strategy branching")
                 } else {
                     val cp = bs.saveCheckpoint(command.name)
-                    CliOutput.printInfo(
+                    output.printInfo(
                         "Checkpoint '${cp.name}' saved at message ${cp.messageCount} of branch '${bs.currentBranchName()}'."
                     )
                 }
@@ -197,53 +213,62 @@ suspend fun startInteractiveCli(apiKey: String, config: llmchat.cli.CliConfig) {
             is Command.FactsList -> {
                 val fs = strategy as? StickyFactsStrategy
                 if (fs == null) {
-                    CliOutput.printError("Facts commands require --strategy sticky-facts")
+                    output.printError("Facts commands require --strategy sticky-facts")
                 } else {
-                    CliOutput.printFacts(fs.getFacts())
+                    output.printFacts(fs.getFacts())
                 }
             }
 
             is Command.FactsSet -> {
                 val fs = strategy as? StickyFactsStrategy
                 if (fs == null) {
-                    CliOutput.printError("Facts commands require --strategy sticky-facts")
+                    output.printError("Facts commands require --strategy sticky-facts")
                 } else {
                     fs.setFact(command.key, command.value)
-                    CliOutput.printInfo("Fact set: ${command.key} = ${command.value}")
+                    output.printInfo("Fact set: ${command.key} = ${command.value}")
                 }
             }
 
             is Command.FactsDelete -> {
                 val fs = strategy as? StickyFactsStrategy
                 if (fs == null) {
-                    CliOutput.printError("Facts commands require --strategy sticky-facts")
+                    output.printError("Facts commands require --strategy sticky-facts")
                 } else {
                     fs.deleteFact(command.key)
-                    CliOutput.printInfo("Fact '${command.key}' removed.")
+                    output.printInfo("Fact '${command.key}' removed.")
                 }
             }
 
             is Command.Unknown -> {
-                CliOutput.printError("Unknown command: ${command.input}")
-                println("Type /help for available commands.")
+                output.printError("Unknown command: ${command.input}")
+                output.printInfo("Type /help for available commands.")
             }
 
-            is Command.Message -> handleMessage(conversationManager, command.content)
+            is Command.Message -> handleMessage(conversationManager, command.content, output, spinner, scope)
         }
     }
+
+    inputReader.close()
 }
 
-suspend fun handleMessage(conversationManager: ConversationManager, message: String) {
+suspend fun handleMessage(
+    conversationManager: ConversationManager,
+    message: String,
+    output: CliOutput,
+    spinner: ThinkingSpinner,
+    scope: CoroutineScope
+) {
     try {
-        CliOutput.printThinkingIndicator()
+        spinner.start(scope)
 
         val result = conversationManager.sendMessage(message)
 
+        spinner.stop()
+
         result.fold(
             onSuccess = { stats ->
-                CliOutput.clearThinkingIndicator()
-                println(stats.response)
-                CliOutput.printTokenStats(
+                output.printAssistantResponse(stats.response)
+                output.printTokenStats(
                     inputTokens = stats.inputTokens,
                     windowTokens = stats.windowTokens,
                     summaryTokens = stats.summaryTokens,
@@ -252,34 +277,13 @@ suspend fun handleMessage(conversationManager: ConversationManager, message: Str
                 )
             },
             onFailure = { error ->
-                println()
-                CliOutput.printError("Error communicating with LLM: ${error.message}")
-                println("Please try again or type /exit to quit.")
+                output.printError("Error communicating with LLM: ${error.message}")
+                output.printInfo("Please try again or type /exit to quit.")
             }
         )
     } catch (e: Exception) {
-        println()
-        CliOutput.printError("Unexpected error: ${e.message}")
-        println("Please try again or type /exit to quit.")
+        spinner.stop()
+        output.printError("Unexpected error: ${e.message}")
+        output.printInfo("Please try again or type /exit to quit.")
     }
-}
-
-fun readMultilineInput(): String? {
-    val lines = mutableListOf<String>()
-
-    while (true) {
-        val line = readlnOrNull() ?: return if (lines.isEmpty()) null else lines.joinToString("\n")
-
-        if (line.trim().isEmpty() && lines.isNotEmpty()) {
-            break
-        }
-
-        if (line.trim().isEmpty() && lines.isEmpty()) {
-            continue
-        }
-
-        lines.add(line)
-    }
-
-    return lines.joinToString("\n").trim()
 }
