@@ -32,9 +32,15 @@ class CommandCompleter(private val strategyType: StrategyType) : Completer {
                     commands.add("/branch")
                     commands.add("/checkpoint")
                 }
+
                 StrategyType.STICKY_FACTS -> {
                     commands.add("/facts")
                 }
+
+                StrategyType.LAYERED -> {
+                    commands.add("/memory")
+                }
+
                 else -> {}
             }
             commands
@@ -49,6 +55,7 @@ class CommandCompleter(private val strategyType: StrategyType) : Completer {
                 "/branch" -> listOf("list", "new", "switch")
                 "/checkpoint" -> listOf("list", "save")
                 "/facts" -> listOf("list", "set", "delete")
+                "/memory" -> listOf("add", "list", "delete", "clear")
                 else -> emptyList()
             }
             subCommands

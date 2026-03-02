@@ -6,7 +6,8 @@ package llmchat.cli
 enum class StrategyType(val cliName: String, val displayName: String) {
     SLIDING_WINDOW("sliding-window", "Sliding Window (drop oldest messages)"),
     STICKY_FACTS("sticky-facts", "Sticky Facts (key-value memory + recent window)"),
-    BRANCHING("branching", "Branching (checkpoints & independent branches)");
+    BRANCHING("branching", "Branching (checkpoints & independent branches)"),
+    LAYERED("layered", "Layered Memory (short-term / work / long-term)");
 
     companion object {
         val default = SLIDING_WINDOW

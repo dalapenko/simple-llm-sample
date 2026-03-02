@@ -7,10 +7,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.runBlocking
 import llmchat.agent.ConversationManager
 import llmchat.agent.ConversationStorage
-import llmchat.agent.context.BranchingStrategy
-import llmchat.agent.context.ContextStrategy
-import llmchat.agent.context.SlidingWindowStrategy
-import llmchat.agent.context.StickyFactsStrategy
+import llmchat.agent.context.*
+import llmchat.agent.memory.MemoryLayer
 import llmchat.cli.CliParser
 import llmchat.cli.Command
 import llmchat.cli.StrategyType
@@ -94,6 +92,9 @@ suspend fun startInteractiveCli(
 
         StrategyType.BRANCHING ->
             BranchingStrategy(config.contextWindow.windowSize)
+
+        StrategyType.LAYERED ->
+            LayeredMemoryStrategy(config.contextWindow.windowSize)
     }
 
     val conversationManager = ConversationManager(
@@ -239,6 +240,50 @@ suspend fun startInteractiveCli(
                 }
             }
 
+            // ── Memory commands ────────────────────────────────────────────
+
+            is Command.MemoryAdd -> {
+                val lms = strategy as? LayeredMemoryStrategy
+                if (lms == null) {
+                    output.printError("Memory commands require --strategy layered")
+                } else {
+                    val item = lms.addToLayer(command.layer, command.data)
+                    output.printInfo("Added [${item.id}] to ${command.layer.displayName}.")
+                }
+            }
+
+            is Command.MemoryList -> {
+                val lms = strategy as? LayeredMemoryStrategy
+                if (lms == null) {
+                    output.printError("Memory commands require --strategy layered")
+                } else {
+                    val layers = if (command.layer != null) listOf(command.layer) else MemoryLayer.entries
+                    val itemsByLayer = layers.associateWith { lms.listLayer(it) }
+                    output.printMemoryList(command.layer, itemsByLayer)
+                }
+            }
+
+            is Command.MemoryDelete -> {
+                val lms = strategy as? LayeredMemoryStrategy
+                if (lms == null) {
+                    output.printError("Memory commands require --strategy layered")
+                } else {
+                    val removed = lms.deleteFromLayer(command.layer, command.id)
+                    if (removed) output.printInfo("Deleted [${command.id}] from ${command.layer.displayName}.")
+                    else output.printError("No item with id '${command.id}' in ${command.layer.displayName}.")
+                }
+            }
+
+            is Command.MemoryClear -> {
+                val lms = strategy as? LayeredMemoryStrategy
+                if (lms == null) {
+                    output.printError("Memory commands require --strategy layered")
+                } else {
+                    lms.clearLayer(command.layer)
+                    output.printInfo("${command.layer.displayName} cleared.")
+                }
+            }
+
             is Command.Unknown -> {
                 output.printError("Unknown command: ${command.input}")
                 output.printInfo("Type /help for available commands.")
@@ -273,7 +318,8 @@ suspend fun handleMessage(
                     windowTokens = stats.windowTokens,
                     summaryTokens = stats.summaryTokens,
                     responseTokens = stats.responseTokens,
-                    totalTokens = stats.totalTokens
+                    totalTokens = stats.totalTokens,
+                    longTermTokens = stats.longTermTokens
                 )
             },
             onFailure = { error ->

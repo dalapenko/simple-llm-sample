@@ -6,7 +6,7 @@ package llmchat.agent.context
  * @property primary   Tokens from the main message history (recent exchanges).
  * @property secondary Tokens from secondary context (facts in StickyFacts, 0 for others).
  */
-data class ContextTokenStats(val primary: Int, val secondary: Int = 0)
+data class ContextTokenStats(val primary: Int, val secondary: Int = 0, val tertiary: Int = 0)
 
 /**
  * Strategy interface for conversation context management.

@@ -1,16 +1,14 @@
 package llmchat.ui
 
 import com.github.ajalt.mordant.markdown.Markdown
-import com.github.ajalt.mordant.rendering.TextColors.blue
-import com.github.ajalt.mordant.rendering.TextColors.cyan
-import com.github.ajalt.mordant.rendering.TextColors.green
-import com.github.ajalt.mordant.rendering.TextColors.red
-import com.github.ajalt.mordant.rendering.TextColors.yellow
+import com.github.ajalt.mordant.rendering.TextColors.*
 import com.github.ajalt.mordant.rendering.TextStyles.bold
 import com.github.ajalt.mordant.rendering.TextStyles.dim
 import com.github.ajalt.mordant.terminal.Terminal
 import llmchat.agent.context.Branch
 import llmchat.agent.context.Checkpoint
+import llmchat.agent.memory.MemoryItem
+import llmchat.agent.memory.MemoryLayer
 import llmchat.cli.CliConfig
 import llmchat.cli.StrategyType
 
@@ -20,9 +18,9 @@ class CliOutput(private val terminal: Terminal) {
         terminal.println()
         terminal.println(
             bold(" LLM Chat") + dim(" | ") +
-            cyan(config.model.displayName) + dim(" | ") +
-            config.strategyType.cliName + dim(" | ") +
-            dim("/help for commands")
+                    cyan(config.model.displayName) + dim(" | ") +
+                    config.strategyType.cliName + dim(" | ") +
+                    dim("/help for commands")
         )
         terminal.println(dim("─".repeat(72)))
         terminal.println()
@@ -47,6 +45,7 @@ class CliOutput(private val terminal: Terminal) {
                 "/facts set K V" to "Set fact K to value V",
                 "/facts delete K" to "Remove fact K"
             )
+
             StrategyType.BRANCHING -> listOf(
                 "/branch list" to "List all branches",
                 "/branch new <name>" to "Fork current state into a new branch",
@@ -55,6 +54,14 @@ class CliOutput(private val terminal: Terminal) {
                 "/checkpoint list" to "List saved checkpoints",
                 "/checkpoint save <name>" to "Save checkpoint at current position"
             )
+
+            StrategyType.LAYERED -> listOf(
+                "/memory list [layer]" to "List items (layer: short-term | work | long-term)",
+                "/memory add <layer> <data>" to "Add data to a memory layer",
+                "/memory delete <layer> <id>" to "Delete an item by id",
+                "/memory clear <layer>" to "Clear all items from a layer"
+            )
+
             else -> emptyList()
         }
 
@@ -89,17 +96,38 @@ class CliOutput(private val terminal: Terminal) {
         windowTokens: Int,
         summaryTokens: Int,
         responseTokens: Int,
-        totalTokens: Int
+        totalTokens: Int,
+        longTermTokens: Int = 0
     ) {
         val parts = mutableListOf(
             "in: ~$inputTokens",
             "ctx: ~$windowTokens"
         )
-        if (summaryTokens > 0) parts.add("facts: ~$summaryTokens")
+        if (summaryTokens > 0) parts.add("work: ~$summaryTokens")
+        if (longTermTokens > 0) parts.add("long: ~$longTermTokens")
         parts.add("out: ~$responseTokens")
         parts.add("total: ~$totalTokens")
         terminal.println(dim("   [${parts.joinToString(" | ")}]"))
         terminal.println()
+    }
+
+    fun printMemoryList(layer: MemoryLayer?, itemsByLayer: Map<MemoryLayer, List<MemoryItem>>) {
+        terminal.println()
+        val layers = if (layer != null) listOf(layer) else MemoryLayer.entries
+        layers.forEach { l ->
+            val items = itemsByLayer[l] ?: emptyList()
+            terminal.println(bold(" ${l.displayName}"))
+            terminal.println(dim("─".repeat(50)))
+            if (items.isEmpty()) {
+                terminal.println(dim("  (empty)"))
+            } else {
+                items.forEach { item ->
+                    terminal.println("  ${dim("[${item.id}]")} ${item.content}")
+                }
+            }
+            terminal.println(dim("─".repeat(50)))
+            terminal.println()
+        }
     }
 
     fun printBranchList(branches: List<Branch>, currentBranchName: String) {

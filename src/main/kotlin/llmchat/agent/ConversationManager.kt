@@ -43,7 +43,8 @@ class ConversationManager(
                     inputTokens = inputTokens,
                     windowTokens = statsBeforeTurn.primary,
                     summaryTokens = statsBeforeTurn.secondary,
-                    responseTokens = responseTokens
+                    responseTokens = responseTokens,
+                    longTermTokens = statsBeforeTurn.tertiary
                 )
             )
         } catch (e: Exception) {

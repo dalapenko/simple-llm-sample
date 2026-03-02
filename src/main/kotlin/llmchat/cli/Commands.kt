@@ -1,5 +1,7 @@
 package llmchat.cli
 
+import llmchat.agent.memory.MemoryLayer
+
 /**
  * Represents commands that can be executed in the interactive CLI.
  */
@@ -50,6 +52,20 @@ sealed class Command {
 
     /** Remove a fact by key. */
     data class FactsDelete(val key: String) : Command()
+
+    // ── Memory commands (LayeredMemoryStrategy) ────────────────────────────────
+
+    /** Add data to a memory layer. */
+    data class MemoryAdd(val layer: MemoryLayer, val data: String) : Command()
+
+    /** List items from a specific layer (or all layers if null). */
+    data class MemoryList(val layer: MemoryLayer?) : Command()
+
+    /** Delete an item by id from a memory layer. */
+    data class MemoryDelete(val layer: MemoryLayer, val id: String) : Command()
+
+    /** Clear all items from a memory layer. */
+    data class MemoryClear(val layer: MemoryLayer) : Command()
 
     // ── Parsing ────────────────────────────────────────────────────────────────
 
@@ -125,6 +141,49 @@ sealed class Command {
                         val key = parts.getOrNull(2)
                             ?: return Unknown("/facts delete requires a key")
                         FactsDelete(key)
+                    }
+
+                    else -> Unknown(input)
+                }
+
+                // Memory commands
+                "/memory" -> when (parts.getOrNull(1)) {
+                    "add" -> {
+                        val layerName = parts.getOrNull(2)
+                            ?: return Unknown("/memory add requires <layer> <data>")
+                        val layer = MemoryLayer.fromCliName(layerName)
+                            ?: return Unknown("Unknown memory layer: $layerName. Use: short-term, work, long-term")
+                        // Recapture full data (everything after the layer name)
+                        val dataStart = input.indexOf(layerName) + layerName.length
+                        val data = input.substring(dataStart).trim()
+                        if (data.isEmpty()) return Unknown("/memory add requires data after the layer name")
+                        MemoryAdd(layer, data)
+                    }
+
+                    "list" -> {
+                        val layer = parts.getOrNull(2)?.let { name ->
+                            MemoryLayer.fromCliName(name)
+                                ?: return Unknown("Unknown memory layer: $name. Use: short-term, work, long-term")
+                        }
+                        MemoryList(layer)
+                    }
+
+                    "delete" -> {
+                        val layerName = parts.getOrNull(2)
+                            ?: return Unknown("/memory delete requires <layer> <id>")
+                        val layer = MemoryLayer.fromCliName(layerName)
+                            ?: return Unknown("Unknown memory layer: $layerName. Use: short-term, work, long-term")
+                        val id = parts.getOrNull(3)
+                            ?: return Unknown("/memory delete requires an id")
+                        MemoryDelete(layer, id)
+                    }
+
+                    "clear" -> {
+                        val layerName = parts.getOrNull(2)
+                            ?: return Unknown("/memory clear requires <layer>")
+                        val layer = MemoryLayer.fromCliName(layerName)
+                            ?: return Unknown("Unknown memory layer: $layerName. Use: short-term, work, long-term")
+                        MemoryClear(layer)
                     }
 
                     else -> Unknown(input)
