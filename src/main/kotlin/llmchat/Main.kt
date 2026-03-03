@@ -9,6 +9,8 @@ import llmchat.agent.ConversationManager
 import llmchat.agent.ConversationStorage
 import llmchat.agent.context.*
 import llmchat.agent.memory.MemoryLayer
+import llmchat.agent.profile.ProfileManager
+import java.io.File
 import llmchat.cli.CliParser
 import llmchat.cli.Command
 import llmchat.cli.StrategyType
@@ -97,9 +99,18 @@ suspend fun startInteractiveCli(
             LayeredMemoryStrategy(config.contextWindow.windowSize)
     }
 
+    val profileManager = if (config.profilePath != null) {
+        val file = File(config.profilePath)
+        output.printInfo("Using profile: ${file.absolutePath}")
+        ProfileManager(file, writeDefaultIfMissing = false)
+    } else {
+        ProfileManager()
+    }
+
     val conversationManager = ConversationManager(
         agentFactory = agentFactory,
-        strategy = strategy
+        strategy = strategy,
+        profileManager = profileManager
     )
     conversationManager.setBaseSystemPrompt(config.systemPrompt)
 
@@ -282,6 +293,18 @@ suspend fun startInteractiveCli(
                     lms.clearLayer(command.layer)
                     output.printInfo("${command.layer.displayName} cleared.")
                 }
+            }
+
+            // ── Profile commands ───────────────────────────────────────────
+
+            is Command.ProfileShow -> output.printProfileStatus(profileManager)
+
+            is Command.ProfilePath -> output.printInfo("Profile file: ${profileManager.filePath()}")
+
+            is Command.ProfileReload -> {
+                profileManager.reload()
+                val status = if (profileManager.getProfile() != null) "loaded" else "not active (file empty or missing)"
+                output.printInfo("Profile reloaded — $status.")
             }
 
             is Command.Unknown -> {

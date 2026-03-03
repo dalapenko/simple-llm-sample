@@ -9,6 +9,7 @@ import llmchat.agent.context.Branch
 import llmchat.agent.context.Checkpoint
 import llmchat.agent.memory.MemoryItem
 import llmchat.agent.memory.MemoryLayer
+import llmchat.agent.profile.ProfileManager
 import llmchat.cli.CliConfig
 import llmchat.cli.StrategyType
 
@@ -35,6 +36,16 @@ class CliOutput(private val terminal: Terminal) {
             "/history" to "Show conversation history",
             "/strategy" to "Show active context strategy",
             "/exit, /quit" to "Exit the application"
+        ).forEach { (cmd, desc) ->
+            terminal.println("  ${cyan(cmd.padEnd(22))} $desc")
+        }
+
+        terminal.println()
+        terminal.println(bold("Profile:"))
+        listOf(
+            "/profile" to "Show profile status",
+            "/profile path" to "Show profile file path",
+            "/profile reload" to "Reload profile.md from disk"
         ).forEach { (cmd, desc) ->
             terminal.println("  ${cyan(cmd.padEnd(22))} $desc")
         }
@@ -175,6 +186,26 @@ class CliOutput(private val terminal: Terminal) {
             }
         }
         terminal.println(dim("─".repeat(40)))
+        terminal.println()
+    }
+
+    fun printProfileStatus(profileManager: ProfileManager) {
+        terminal.println()
+        terminal.println(bold(" User Profile"))
+        terminal.println(dim("─".repeat(50)))
+        terminal.println("  ${dim("File:")} ${profileManager.filePath()}")
+        val profile = profileManager.getProfile()
+        if (profile == null) {
+            terminal.println("  ${dim("Status:")} ${yellow("not active")} ${dim("(file missing or empty)")}")
+        } else {
+            val tokens = profileManager.estimateTokens()
+            terminal.println("  ${dim("Status:")} ${green("active")} ${dim("(~$tokens tokens)")}")
+            terminal.println()
+            terminal.println(dim("  Preview (first 200 chars):"))
+            val preview = profile.content.take(200).replace("\n", " ↵ ")
+            terminal.println(dim("  $preview${if (profile.content.length > 200) "…" else ""}"))
+        }
+        terminal.println(dim("─".repeat(50)))
         terminal.println()
     }
 

@@ -2,6 +2,7 @@ package llmchat.agent
 
 import ai.koog.agents.core.agent.AIAgent
 import llmchat.agent.context.ContextStrategy
+import llmchat.agent.profile.ProfileManager
 
 /**
  * Orchestrates conversation turns: builds the enriched system prompt,
@@ -13,7 +14,8 @@ import llmchat.agent.context.ContextStrategy
  */
 class ConversationManager(
     private val agentFactory: (systemPrompt: String) -> AIAgent<String, String>,
-    val strategy: ContextStrategy
+    val strategy: ContextStrategy,
+    val profileManager: ProfileManager = ProfileManager()
 ) {
     private var baseSystemPrompt: String =
         "You are a helpful assistant. Answer user questions concisely."
@@ -53,9 +55,19 @@ class ConversationManager(
     }
 
     private fun buildSystemPrompt(): String {
+        val profileBlock = profileManager.buildPromptBlock()
         val contextBlock = strategy.buildContextBlock()
-        return if (contextBlock.isEmpty()) baseSystemPrompt
-        else "$baseSystemPrompt\n\n$contextBlock"
+        return buildString {
+            append(baseSystemPrompt)
+            if (profileBlock.isNotEmpty()) {
+                append("\n\n")
+                append(profileBlock)
+            }
+            if (contextBlock.isNotEmpty()) {
+                append("\n\n")
+                append(contextBlock)
+            }
+        }
     }
 
     fun setBaseSystemPrompt(prompt: String) {

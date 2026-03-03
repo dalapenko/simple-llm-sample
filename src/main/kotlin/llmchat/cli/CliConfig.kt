@@ -9,5 +9,6 @@ data class CliConfig(
     val model: SupportedModel = SupportedModel.default,
     val contextWindow: ContextWindowConfig = ContextWindowConfig(),
     val strategyType: StrategyType = StrategyType.default,
-    val showHelp: Boolean = false
+    val showHelp: Boolean = false,
+    val profilePath: String? = null
 )

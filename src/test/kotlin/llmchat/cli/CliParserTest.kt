@@ -194,6 +194,36 @@ class CliParserTest {
         }
     }
 
+    // ── --profile ────────────────────────────────────────────────────────────
+
+    @Test
+    fun `profile path is stored in config`() {
+        val config = CliParser.parse(arrayOf("--profile", "/tmp/my-profile.md"))
+        assertEquals("/tmp/my-profile.md", config.profilePath)
+    }
+
+    @Test
+    fun `profile path defaults to null when not provided`() {
+        val config = CliParser.parse(emptyArray())
+        assertEquals(null, config.profilePath)
+    }
+
+    @Test
+    fun `profile without value throws`() {
+        assertFailsWith<IllegalArgumentException> {
+            CliParser.parse(arrayOf("--profile"))
+        }
+    }
+
+    @Test
+    fun `profile can be combined with other flags`() {
+        val config = CliParser.parse(
+            arrayOf("--profile", "profiles/sample.md", "--model", "gpt-4o")
+        )
+        assertEquals("profiles/sample.md", config.profilePath)
+        assertEquals(SupportedModel.GPT4O, config.model)
+    }
+
     // ── --help / -h ──────────────────────────────────────────────────────────
 
     @Test

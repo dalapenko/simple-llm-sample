@@ -273,4 +273,31 @@ class CommandParseTest {
     fun `slash-memory with unknown subcommand returns Unknown`() {
         assertIs<Command.Unknown>(Command.parse("/memory"))
     }
+
+    // ── Profile commands ─────────────────────────────────────────────────────
+
+    @Test
+    fun `slash-profile returns ProfileShow`() {
+        assertIs<Command.ProfileShow>(Command.parse("/profile"))
+    }
+
+    @Test
+    fun `slash-profile-show returns ProfileShow`() {
+        assertIs<Command.ProfileShow>(Command.parse("/profile show"))
+    }
+
+    @Test
+    fun `slash-profile-path returns ProfilePath`() {
+        assertIs<Command.ProfilePath>(Command.parse("/profile path"))
+    }
+
+    @Test
+    fun `slash-profile-reload returns ProfileReload`() {
+        assertIs<Command.ProfileReload>(Command.parse("/profile reload"))
+    }
+
+    @Test
+    fun `slash-profile with unknown subcommand returns Unknown`() {
+        assertIs<Command.Unknown>(Command.parse("/profile delete"))
+    }
 }

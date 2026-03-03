@@ -67,6 +67,17 @@ sealed class Command {
     /** Clear all items from a memory layer. */
     data class MemoryClear(val layer: MemoryLayer) : Command()
 
+    // ── Profile commands ───────────────────────────────────────────────────────
+
+    /** Show the active profile status (loaded/absent) and file path. */
+    data object ProfileShow : Command()
+
+    /** Show the absolute path to the profile.md file. */
+    data object ProfilePath : Command()
+
+    /** Reload profile.md from disk without restarting. */
+    data object ProfileReload : Command()
+
     // ── Parsing ────────────────────────────────────────────────────────────────
 
     companion object {
@@ -187,6 +198,14 @@ sealed class Command {
                     }
 
                     else -> Unknown(input)
+                }
+
+                // Profile commands
+                "/profile" -> when (parts.getOrNull(1)) {
+                    null, "show" -> ProfileShow
+                    "path"       -> ProfilePath
+                    "reload"     -> ProfileReload
+                    else         -> Unknown(input)
                 }
 
                 else -> Unknown(input)

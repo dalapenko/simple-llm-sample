@@ -22,6 +22,7 @@ object CliParser {
         var summaryBatchSize = 10
         var strategyType = StrategyType.default
         var showHelp = false
+        var profilePath: String? = null
 
         var i = 0
         while (i < args.size) {
@@ -106,6 +107,15 @@ object CliParser {
                     }
                 }
 
+                "--profile" -> {
+                    if (i + 1 < args.size) {
+                        profilePath = args[i + 1]
+                        i += 2
+                    } else {
+                        throw IllegalArgumentException("--profile requires a path argument")
+                    }
+                }
+
                 else -> {
                     throw IllegalArgumentException("Unknown argument: ${args[i]}")
                 }
@@ -118,7 +128,8 @@ object CliParser {
             model,
             ContextWindowConfig(contextWindowSize, summaryBatchSize),
             strategyType,
-            showHelp
+            showHelp,
+            profilePath
         )
     }
 
@@ -145,7 +156,10 @@ ${StrategyType.entries.joinToString("\n") { "                                   
               --model MODEL             AI model to use (default: ${SupportedModel.default.cliName})
                                         Available models:
 ${SupportedModel.entries.joinToString("\n") { "                                          ${it.cliName.padEnd(12)} - ${it.displayName}" }}
-            
+              --profile PATH            Path to a profile.md file (default: ~/.llmchat/profile.md)
+                                        Injected into every request as user preferences.
+                                        See profiles/sample.md in the repo for an example.
+
             Interactive Commands:
               /help       Show available commands
               /clear      Clear conversation history
@@ -159,6 +173,7 @@ ${SupportedModel.entries.joinToString("\n") { "                                 
               ./gradlew run --args="--system-prompt 'You are a coding assistant'"
               ./gradlew run --args="--temperature 0.7"
               ./gradlew run --args="--model mistral-7b --temperature 0.5"
+              ./gradlew run --args="--profile profiles/sample.md"
             
             Environment Variables:
               OPENROUTER_API_KEY    Required: Your OpenRouter API key
