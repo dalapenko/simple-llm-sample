@@ -1,7 +1,7 @@
 # Тематика
 Демонстрация трёхслойной модели памяти (Layered Memory): изоляция слоёв Short-Term, Work Memory и Long-Term, удержание фактов при переполнении скользящего окна.
 
-**Запись сессии**: [`layered-memory.cast`](layered-memory.cast) (asciinema v3, 120×35)
+**Запись сессии**:  ![demo](demo.gif)
 
 ---
 
