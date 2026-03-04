@@ -1,6 +1,8 @@
 package llmchat.cli
 
 import llmchat.agent.memory.MemoryLayer
+import llmchat.agent.task.ExpectedAction
+import llmchat.agent.task.TaskStage
 
 /**
  * Represents commands that can be executed in the interactive CLI.
@@ -66,6 +68,29 @@ sealed class Command {
 
     /** Clear all items from a memory layer. */
     data class MemoryClear(val layer: MemoryLayer) : Command()
+
+    // ── Task commands ──────────────────────────────────────────────────────────
+
+    /** Start tracking a new task with the given description. */
+    data class TaskStart(val description: String) : Command()
+
+    /** Show the current task state. */
+    data object TaskStatus : Command()
+
+    /** Pause the task (saves state without marking done). */
+    data object TaskPause : Command()
+
+    /** Mark the task as done and clear saved state. */
+    data object TaskDone : Command()
+
+    /** Cancel and discard the current task. */
+    data object TaskCancel : Command()
+
+    /** Advance the task to a new stage. */
+    data class TaskAdvance(val stage: TaskStage) : Command()
+
+    /** Update the current step description (and optionally expected action). */
+    data class TaskStep(val description: String, val action: ExpectedAction?) : Command()
 
     // ── Profile commands ───────────────────────────────────────────────────────
 
@@ -200,12 +225,56 @@ sealed class Command {
                     else -> Unknown(input)
                 }
 
+                // Task commands
+                "/task" -> when (parts.getOrNull(1)) {
+                    "start" -> {
+                        val descStart = input.indexOf("start") + "start".length
+                        val desc = input.substring(descStart).trim()
+                        if (desc.isEmpty()) return Unknown("/task start requires a description")
+                        TaskStart(desc)
+                    }
+
+                    "status" -> TaskStatus
+
+                    "pause" -> TaskPause
+
+                    "done" -> TaskDone
+
+                    "cancel" -> TaskCancel
+
+                    "advance" -> {
+                        val stageName = parts.getOrNull(2)
+                            ?: return Unknown("/task advance requires a stage name")
+                        val stage = TaskStage.entries.find { it.name.equals(stageName, ignoreCase = true) }
+                            ?: return Unknown("Unknown stage: $stageName. Use: planning, execution, validation, done, error")
+                        TaskAdvance(stage)
+                    }
+
+                    "step" -> {
+                        val stepStart = input.indexOf("step") + "step".length
+                        val remainder = input.substring(stepStart).trim()
+                        if (remainder.isEmpty()) return Unknown("/task step requires a description")
+                        // Optional trailing action keyword: last word if it matches an ExpectedAction
+                        val words = remainder.split("\\s+".toRegex())
+                        val lastWord = words.last()
+                        val action = ExpectedAction.entries.find { it.name.equals(lastWord, ignoreCase = true) }
+                        val desc = if (action != null && words.size > 1) {
+                            words.dropLast(1).joinToString(" ")
+                        } else {
+                            remainder
+                        }
+                        TaskStep(desc, action)
+                    }
+
+                    else -> Unknown(input)
+                }
+
                 // Profile commands
                 "/profile" -> when (parts.getOrNull(1)) {
                     null, "show" -> ProfileShow
-                    "path"       -> ProfilePath
-                    "reload"     -> ProfileReload
-                    else         -> Unknown(input)
+                    "path" -> ProfilePath
+                    "reload" -> ProfileReload
+                    else -> Unknown(input)
                 }
 
                 else -> Unknown(input)

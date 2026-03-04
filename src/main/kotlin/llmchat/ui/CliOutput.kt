@@ -10,6 +10,8 @@ import llmchat.agent.context.Checkpoint
 import llmchat.agent.memory.MemoryItem
 import llmchat.agent.memory.MemoryLayer
 import llmchat.agent.profile.ProfileManager
+import llmchat.agent.task.TaskStage
+import llmchat.agent.task.TaskState
 import llmchat.cli.CliConfig
 import llmchat.cli.StrategyType
 
@@ -82,6 +84,20 @@ class CliOutput(private val terminal: Terminal) {
             extra.forEach { (cmd, desc) ->
                 terminal.println("  ${cyan(cmd.padEnd(38))} $desc")
             }
+        }
+
+        terminal.println()
+        terminal.println(bold("Task tracking:"))
+        listOf(
+            "/task start <desc>" to "Start tracking a new task",
+            "/task status" to "Show current task state",
+            "/task advance <stage>" to "Advance stage (planning|execution|validation|done|error)",
+            "/task step <desc>" to "Update current step description",
+            "/task pause" to "Save task state (resume on next startup)",
+            "/task done" to "Mark task done and clear state",
+            "/task cancel" to "Cancel and discard task state"
+        ).forEach { (cmd, desc) ->
+            terminal.println("  ${cyan(cmd.padEnd(30))} $desc")
         }
 
         terminal.println()
@@ -207,6 +223,49 @@ class CliOutput(private val terminal: Terminal) {
         }
         terminal.println(dim("─".repeat(50)))
         terminal.println()
+    }
+
+    fun printTaskStatus(state: TaskState) {
+        val stageColor = stageColor(state.stage)
+        terminal.println()
+        terminal.println(bold(" Task Status"))
+        terminal.println(dim("─".repeat(50)))
+        terminal.println("  ${dim("ID:")}          ${dim(state.id.take(8))}…")
+        terminal.println("  ${dim("Task:")}        ${state.taskDescription}")
+        terminal.println("  ${dim("Stage:")}       ${stageColor(state.stage.displayName)}")
+        terminal.println("  ${dim("Step:")}        ${state.currentStep}")
+        terminal.println("  ${dim("Next action:")} ${state.expectedAction.displayName}")
+        if (state.history.isNotEmpty()) {
+            terminal.println("  ${dim("Transitions:")} ${state.history.size}")
+        }
+        terminal.println(dim("─".repeat(50)))
+        terminal.println()
+    }
+
+    fun printTaskResume(state: TaskState) {
+        val stageColor = stageColor(state.stage)
+        terminal.println()
+        terminal.println(yellow(bold(" ⟳ Resuming Task")))
+        terminal.println(dim("─".repeat(50)))
+        terminal.println("  ${dim("Task:")}  ${state.taskDescription}")
+        terminal.println("  ${dim("Stage:")} ${stageColor(state.stage.displayName)}")
+        terminal.println("  ${dim("Step:")}  ${state.currentStep}")
+        terminal.println(dim("─".repeat(50)))
+        terminal.println()
+    }
+
+    fun printTaskTransition(from: TaskStage, to: TaskStage) {
+        val fromColor = stageColor(from)
+        val toColor = stageColor(to)
+        terminal.println(dim("  Task: ") + fromColor(from.displayName) + dim(" → ") + toColor(to.displayName))
+    }
+
+    private fun stageColor(stage: TaskStage): (String) -> String = when (stage) {
+        TaskStage.PLANNING -> { s -> yellow(s) }
+        TaskStage.EXECUTION -> { s -> cyan(s) }
+        TaskStage.VALIDATION -> { s -> blue(s) }
+        TaskStage.DONE -> { s -> green(s) }
+        TaskStage.ERROR -> { s -> red(s) }
     }
 
     fun printError(message: String) {

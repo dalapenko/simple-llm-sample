@@ -3,6 +3,7 @@ package llmchat.agent
 import ai.koog.agents.core.agent.AIAgent
 import llmchat.agent.context.ContextStrategy
 import llmchat.agent.profile.ProfileManager
+import llmchat.agent.task.TaskFSM
 
 /**
  * Orchestrates conversation turns: builds the enriched system prompt,
@@ -19,6 +20,11 @@ class ConversationManager(
 ) {
     private var baseSystemPrompt: String =
         "You are a helpful assistant. Answer user questions concisely."
+    private var taskFsm: TaskFSM? = null
+
+    fun setTaskFsm(fsm: TaskFSM?) {
+        taskFsm = fsm
+    }
 
     suspend fun sendMessage(userMessage: String): ChatResult<RequestStatistics> {
         return try {
@@ -57,6 +63,7 @@ class ConversationManager(
     private fun buildSystemPrompt(): String {
         val profileBlock = profileManager.buildPromptBlock()
         val contextBlock = strategy.buildContextBlock()
+        val taskBlock = taskFsm?.buildResumptionContext() ?: ""
         return buildString {
             append(baseSystemPrompt)
             if (profileBlock.isNotEmpty()) {
@@ -66,6 +73,10 @@ class ConversationManager(
             if (contextBlock.isNotEmpty()) {
                 append("\n\n")
                 append(contextBlock)
+            }
+            if (taskBlock.isNotEmpty()) {
+                append("\n\n")
+                append(taskBlock)
             }
         }
     }

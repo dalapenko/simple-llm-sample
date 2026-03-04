@@ -25,7 +25,7 @@ class CommandCompleter(private val strategyType: StrategyType) : Completer {
 
         if (parts.size == 1) {
             val commands = mutableListOf(
-                "/help", "/clear", "/history", "/strategy", "/exit", "/quit", "/profile"
+                "/help", "/clear", "/history", "/strategy", "/exit", "/quit", "/profile", "/task"
             )
             when (strategyType) {
                 StrategyType.BRANCHING -> {
@@ -57,6 +57,7 @@ class CommandCompleter(private val strategyType: StrategyType) : Completer {
                 "/facts" -> listOf("list", "set", "delete")
                 "/memory" -> listOf("add", "list", "delete", "clear")
                 "/profile" -> listOf("show", "path", "reload")
+                "/task" -> listOf("start", "status", "pause", "done", "cancel", "advance", "step")
                 else -> emptyList()
             }
             subCommands

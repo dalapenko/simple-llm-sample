@@ -10,13 +10,16 @@ import llmchat.agent.ConversationStorage
 import llmchat.agent.context.*
 import llmchat.agent.memory.MemoryLayer
 import llmchat.agent.profile.ProfileManager
-import java.io.File
+import llmchat.agent.task.TaskFSM
+import llmchat.agent.task.TaskStage
+import llmchat.agent.task.TaskStateStorage
 import llmchat.cli.CliParser
 import llmchat.cli.Command
 import llmchat.cli.StrategyType
 import llmchat.ui.ChatInputReader
 import llmchat.ui.CliOutput
 import llmchat.ui.ThinkingSpinner
+import java.io.File
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
@@ -65,9 +68,15 @@ suspend fun startInteractiveCli(
 ) {
     val inputReader = ChatInputReader(config.strategyType)
     val spinner = ThinkingSpinner(terminal)
+    var taskFsm: TaskFSM? = null
 
     Runtime.getRuntime().addShutdownHook(Thread {
         inputReader.close()
+        taskFsm?.let { fsm ->
+            if (fsm.getState().stage != TaskStage.DONE) {
+                TaskStateStorage.save(fsm.getState())
+            }
+        }
         println("\nGoodbye!")
     })
 
@@ -113,6 +122,24 @@ suspend fun startInteractiveCli(
         profileManager = profileManager
     )
     conversationManager.setBaseSystemPrompt(config.systemPrompt)
+
+    // Task state resume
+    if (TaskStateStorage.hasActiveState()) {
+        val savedState = TaskStateStorage.load()
+        if (savedState != null) {
+            output.printTaskResume(savedState)
+            val answer = inputReader.readInput(
+                terminal.theme.style("prompt")(" Resume task? [y/N]: ")
+                    .ifEmpty { " Resume task? [y/N]: " }
+            )?.trim()?.lowercase()
+            if (answer == "y" || answer == "yes") {
+                taskFsm = TaskFSM(savedState)
+                conversationManager.setTaskFsm(taskFsm)
+            } else {
+                TaskStateStorage.clear()
+            }
+        }
+    }
 
     // Session restore — only for SlidingWindow (linear history)
     if (strategy is SlidingWindowStrategy && ConversationStorage.hasHistory()) {
@@ -292,6 +319,92 @@ suspend fun startInteractiveCli(
                 } else {
                     lms.clearLayer(command.layer)
                     output.printInfo("${command.layer.displayName} cleared.")
+                }
+            }
+
+            // ── Task commands ──────────────────────────────────────────────
+
+            is Command.TaskStart -> {
+                if (taskFsm != null) {
+                    output.printError("A task is already active. Use /task done or /task cancel first.")
+                } else {
+                    val newFsm = TaskFSM.create(command.description)
+                    taskFsm = newFsm
+                    conversationManager.setTaskFsm(newFsm)
+                    output.printTaskStatus(newFsm.getState())
+                }
+            }
+
+            is Command.TaskStatus -> {
+                val fsm = taskFsm
+                if (fsm == null) output.printInfo("No active task. Use /task start <description> to begin.")
+                else output.printTaskStatus(fsm.getState())
+            }
+
+            is Command.TaskPause -> {
+                val fsm = taskFsm
+                if (fsm == null) {
+                    output.printInfo("No active task.")
+                } else {
+                    TaskStateStorage.save(fsm.getState())
+                    output.printInfo("Task paused and saved. It will be offered for resume on next startup.")
+                }
+            }
+
+            is Command.TaskDone -> {
+                val fsm = taskFsm
+                if (fsm == null) {
+                    output.printInfo("No active task.")
+                } else {
+                    val prevStage = fsm.getState().stage
+                    fsm.transition(TaskStage.DONE, "Completed").fold(
+                        onSuccess = { state ->
+                            output.printTaskTransition(prevStage, TaskStage.DONE)
+                            TaskStateStorage.clear()
+                            taskFsm = null
+                            conversationManager.setTaskFsm(null)
+                            output.printInfo("Task completed and state cleared.")
+                        },
+                        onFailure = { e -> output.printError(e.message ?: "Transition failed") }
+                    )
+                }
+            }
+
+            is Command.TaskCancel -> {
+                if (taskFsm == null) {
+                    output.printInfo("No active task.")
+                } else {
+                    TaskStateStorage.clear()
+                    taskFsm = null
+                    conversationManager.setTaskFsm(null)
+                    output.printInfo("Task cancelled and state cleared.")
+                }
+            }
+
+            is Command.TaskAdvance -> {
+                val fsm = taskFsm
+                if (fsm == null) {
+                    output.printError("No active task. Use /task start <description> first.")
+                } else {
+                    val prevStage = fsm.getState().stage
+                    fsm.transition(command.stage).fold(
+                        onSuccess = { state ->
+                            output.printTaskTransition(prevStage, command.stage)
+                            output.printTaskStatus(state)
+                        },
+                        onFailure = { e -> output.printError(e.message ?: "Transition failed") }
+                    )
+                }
+            }
+
+            is Command.TaskStep -> {
+                val fsm = taskFsm
+                if (fsm == null) {
+                    output.printError("No active task.")
+                } else {
+                    val action = command.action ?: fsm.getState().expectedAction
+                    val state = fsm.updateStep(command.description, action)
+                    output.printInfo("Step updated: ${state.currentStep}")
                 }
             }
 
