@@ -1,5 +1,6 @@
 package llmchat.cli
 
+import llmchat.agent.invariant.InvariantCategory
 import llmchat.agent.memory.MemoryLayer
 import llmchat.agent.task.ExpectedAction
 import llmchat.agent.task.TaskStage
@@ -91,6 +92,20 @@ sealed class Command {
 
     /** Update the current step description (and optionally expected action). */
     data class TaskStep(val description: String, val action: ExpectedAction?) : Command()
+
+    // ── Invariant commands ─────────────────────────────────────────────────────
+
+    /** Add a new project invariant constraint. */
+    data class InvariantAdd(val description: String, val category: InvariantCategory) : Command()
+
+    /** List all active invariants. */
+    data object InvariantList : Command()
+
+    /** Remove an invariant by its ID. */
+    data class InvariantRemove(val id: String) : Command()
+
+    /** Remove all invariants. */
+    data object InvariantClear : Command()
 
     // ── Profile commands ───────────────────────────────────────────────────────
 
@@ -265,6 +280,40 @@ sealed class Command {
                         }
                         TaskStep(desc, action)
                     }
+
+                    else -> Unknown(input)
+                }
+
+                // Invariant commands
+                "/invariant" -> when (parts.getOrNull(1)) {
+                    "add" -> {
+                        val remainder = input.substringAfter("add").trim()
+                        if (remainder.isEmpty()) return Unknown("/invariant add requires a description")
+                        val category: InvariantCategory
+                        val description: String
+                        if (remainder.startsWith("--category")) {
+                            val afterFlag = remainder.substringAfter("--category").trim()
+                            val catName = afterFlag.split("\\s+".toRegex()).firstOrNull() ?: ""
+                            category = InvariantCategory.fromCliName(catName)
+                                ?: return Unknown("Unknown category: $catName. Use: stack, architecture, business-rule, general")
+                            description = afterFlag.substringAfter(catName).trim()
+                        } else {
+                            category = InvariantCategory.GENERAL
+                            description = remainder
+                        }
+                        if (description.isEmpty()) return Unknown("/invariant add requires a description after the category flag")
+                        InvariantAdd(description, category)
+                    }
+
+                    null, "list" -> InvariantList
+
+                    "remove" -> {
+                        val id = parts.getOrNull(2)
+                            ?: return Unknown("/invariant remove requires an invariant ID")
+                        InvariantRemove(id)
+                    }
+
+                    "clear" -> InvariantClear
 
                     else -> Unknown(input)
                 }

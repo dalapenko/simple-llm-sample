@@ -8,6 +8,7 @@ import kotlinx.coroutines.runBlocking
 import llmchat.agent.ConversationManager
 import llmchat.agent.ConversationStorage
 import llmchat.agent.context.*
+import llmchat.agent.invariant.InvariantStorage
 import llmchat.agent.memory.MemoryLayer
 import llmchat.agent.profile.ProfileManager
 import llmchat.agent.task.TaskFSM
@@ -116,10 +117,13 @@ suspend fun startInteractiveCli(
         ProfileManager()
     }
 
+    val invariantStorage = InvariantStorage()
+
     val conversationManager = ConversationManager(
         agentFactory = agentFactory,
         strategy = strategy,
-        profileManager = profileManager
+        profileManager = profileManager,
+        invariantStorage = invariantStorage
     )
     conversationManager.setBaseSystemPrompt(config.systemPrompt)
 
@@ -406,6 +410,29 @@ suspend fun startInteractiveCli(
                     val state = fsm.updateStep(command.description, action)
                     output.printInfo("Step updated: ${state.currentStep}")
                 }
+            }
+
+            // ── Invariant commands ─────────────────────────────────────────
+
+            is Command.InvariantAdd -> {
+                val inv = invariantStorage.add(command.description, command.category)
+                output.printInfo("Invariant added: [${inv.id}] [${inv.category.displayName}] ${inv.description}")
+                if (!invariantStorage.isEmpty()) {
+                    output.printInfo("Active invariants: ${invariantStorage.list().size} — injected into every request.")
+                }
+            }
+
+            is Command.InvariantList -> output.printInvariants(invariantStorage.list())
+
+            is Command.InvariantRemove -> {
+                val removed = invariantStorage.remove(command.id)
+                if (removed) output.printInfo("Invariant [${command.id}] removed.")
+                else output.printError("No invariant with id '${command.id}'.")
+            }
+
+            is Command.InvariantClear -> {
+                invariantStorage.clear()
+                output.printInfo("All invariants cleared.")
             }
 
             // ── Profile commands ───────────────────────────────────────────

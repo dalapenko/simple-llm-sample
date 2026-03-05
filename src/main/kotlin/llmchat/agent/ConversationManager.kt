@@ -2,6 +2,7 @@ package llmchat.agent
 
 import ai.koog.agents.core.agent.AIAgent
 import llmchat.agent.context.ContextStrategy
+import llmchat.agent.invariant.InvariantStorage
 import llmchat.agent.profile.ProfileManager
 import llmchat.agent.task.TaskFSM
 
@@ -16,7 +17,8 @@ import llmchat.agent.task.TaskFSM
 class ConversationManager(
     private val agentFactory: (systemPrompt: String) -> AIAgent<String, String>,
     val strategy: ContextStrategy,
-    val profileManager: ProfileManager = ProfileManager()
+    val profileManager: ProfileManager = ProfileManager(),
+    val invariantStorage: InvariantStorage = InvariantStorage()
 ) {
     private var baseSystemPrompt: String =
         "You are a helpful assistant. Answer user questions concisely."
@@ -61,11 +63,18 @@ class ConversationManager(
     }
 
     private fun buildSystemPrompt(): String {
+        val invariantBlock = invariantStorage.buildPromptBlock()
         val profileBlock = profileManager.buildPromptBlock()
         val contextBlock = strategy.buildContextBlock()
         val taskBlock = taskFsm?.buildResumptionContext() ?: ""
         return buildString {
             append(baseSystemPrompt)
+            // Invariants first: constraints must appear before any other context
+            // so the model evaluates them with maximum attention weight.
+            if (invariantBlock.isNotEmpty()) {
+                append("\n\n")
+                append(invariantBlock)
+            }
             if (profileBlock.isNotEmpty()) {
                 append("\n\n")
                 append(profileBlock)

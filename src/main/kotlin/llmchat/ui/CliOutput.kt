@@ -7,6 +7,8 @@ import com.github.ajalt.mordant.rendering.TextStyles.dim
 import com.github.ajalt.mordant.terminal.Terminal
 import llmchat.agent.context.Branch
 import llmchat.agent.context.Checkpoint
+import llmchat.agent.invariant.Invariant
+import llmchat.agent.invariant.InvariantCategory
 import llmchat.agent.memory.MemoryItem
 import llmchat.agent.memory.MemoryLayer
 import llmchat.agent.profile.ProfileManager
@@ -40,6 +42,18 @@ class CliOutput(private val terminal: Terminal) {
             "/exit, /quit" to "Exit the application"
         ).forEach { (cmd, desc) ->
             terminal.println("  ${cyan(cmd.padEnd(22))} $desc")
+        }
+
+        terminal.println()
+        terminal.println(bold("Invariants:"))
+        listOf(
+            "/invariant list" to "List all project invariants",
+            "/invariant add <desc>" to "Add invariant (category: general)",
+            "/invariant add --category <cat> <desc>" to "Add invariant with category (stack|architecture|business-rule|general)",
+            "/invariant remove <id>" to "Remove invariant by ID",
+            "/invariant clear" to "Remove all invariants"
+        ).forEach { (cmd, desc) ->
+            terminal.println("  ${cyan(cmd.padEnd(42))} $desc")
         }
 
         terminal.println()
@@ -202,6 +216,28 @@ class CliOutput(private val terminal: Terminal) {
             }
         }
         terminal.println(dim("─".repeat(40)))
+        terminal.println()
+    }
+
+    fun printInvariants(invariants: List<Invariant>) {
+        terminal.println()
+        terminal.println(bold(" Project Invariants"))
+        terminal.println(dim("─".repeat(60)))
+        if (invariants.isEmpty()) {
+            terminal.println(dim("  (none defined — use /invariant add [--category <cat>] <desc>)"))
+            terminal.println(dim("  Categories: stack | architecture | business-rule | general"))
+        } else {
+            val byCategory = invariants.groupBy { it.category }
+            InvariantCategory.entries.forEach { cat ->
+                val items = byCategory[cat] ?: return@forEach
+                terminal.println()
+                terminal.println("  ${bold(cat.displayName)}")
+                items.forEach { inv ->
+                    terminal.println("  ${dim("[${inv.id}]")} ${yellow(inv.description)}")
+                }
+            }
+        }
+        terminal.println(dim("─".repeat(60)))
         terminal.println()
     }
 
