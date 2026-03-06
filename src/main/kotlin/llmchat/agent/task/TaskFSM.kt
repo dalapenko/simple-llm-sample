@@ -6,20 +6,33 @@ import java.util.UUID
  * Finite State Machine for tracking long-running task lifecycles.
  *
  * Valid transitions:
- *   PLANNING   → EXECUTION, ERROR
- *   EXECUTION  → VALIDATION, PLANNING, ERROR
- *   VALIDATION → DONE, PLANNING, EXECUTION, ERROR
- *   DONE       → (terminal)
- *   ERROR      → PLANNING
+ *   PLANNING      → PLAN_APPROVED, ERROR
+ *   PLAN_APPROVED → EXECUTION, PLANNING, ERROR
+ *   EXECUTION     → VALIDATION, PLANNING, ERROR
+ *   VALIDATION    → DONE, PLANNING, EXECUTION, ERROR
+ *   DONE          → (terminal)
+ *   ERROR         → PLANNING
+ *
+ * PLAN_APPROVED acts as a mandatory chokepoint: execution cannot begin until
+ * the plan has been explicitly approved, preventing the agent from skipping
+ * the planning phase.
+ *
+ * Optional [guards] are evaluated after the structural graph check. Each guard
+ * may [GuardResult.Deny] a transition with a reason (and optional invariant ID),
+ * or [GuardResult.Allow] it to proceed.
  */
-class TaskFSM(private var state: TaskState) {
+class TaskFSM(
+    private var state: TaskState,
+    private val guards: List<TransitionGuard> = emptyList()
+) {
 
     private val validTransitions: Map<TaskStage, Set<TaskStage>> = mapOf(
-        TaskStage.PLANNING   to setOf(TaskStage.EXECUTION, TaskStage.ERROR),
-        TaskStage.EXECUTION  to setOf(TaskStage.VALIDATION, TaskStage.PLANNING, TaskStage.ERROR),
-        TaskStage.VALIDATION to setOf(TaskStage.DONE, TaskStage.PLANNING, TaskStage.EXECUTION, TaskStage.ERROR),
-        TaskStage.DONE       to emptySet(),
-        TaskStage.ERROR      to setOf(TaskStage.PLANNING)
+        TaskStage.PLANNING      to setOf(TaskStage.PLAN_APPROVED, TaskStage.ERROR),
+        TaskStage.PLAN_APPROVED to setOf(TaskStage.EXECUTION, TaskStage.PLANNING, TaskStage.ERROR),
+        TaskStage.EXECUTION     to setOf(TaskStage.VALIDATION, TaskStage.PLANNING, TaskStage.ERROR),
+        TaskStage.VALIDATION    to setOf(TaskStage.DONE, TaskStage.PLANNING, TaskStage.EXECUTION, TaskStage.ERROR),
+        TaskStage.DONE          to emptySet(),
+        TaskStage.ERROR         to setOf(TaskStage.PLANNING)
     )
 
     fun getState(): TaskState = state
@@ -37,6 +50,18 @@ class TaskFSM(private var state: TaskState) {
                     "Allowed from ${state.stage}: ${allowed.joinToString { it.name }}"
                 )
             )
+        }
+
+        for (guard in guards) {
+            val result = guard.validate(state.stage, newStage)
+            if (result is GuardResult.Deny) {
+                val invariantSuffix = result.invariantId?.let { " [Invariant: $it]" }.orEmpty()
+                return Result.failure(
+                    IllegalStateException(
+                        "Transition ${state.stage} → $newStage blocked: ${result.reason}$invariantSuffix"
+                    )
+                )
+            }
         }
 
         val now = System.currentTimeMillis()
@@ -82,7 +107,7 @@ Continue from the current step. The conversation history above provides context.
     }
 
     companion object {
-        fun create(description: String): TaskFSM {
+        fun create(description: String, guards: List<TransitionGuard> = emptyList()): TaskFSM {
             val now = System.currentTimeMillis()
             val state = TaskState(
                 id = UUID.randomUUID().toString(),
@@ -94,7 +119,7 @@ Continue from the current step. The conversation history above provides context.
                 updatedAt = now,
                 history = emptyList()
             )
-            return TaskFSM(state)
+            return TaskFSM(state, guards)
         }
     }
 }

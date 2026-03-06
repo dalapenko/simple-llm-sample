@@ -62,6 +62,7 @@ class TaskStateStorageTest {
     @Test
     fun `save persists all fields including history`() {
         val fsm = TaskFSM.create("full task")
+        fsm.transition(TaskStage.PLAN_APPROVED, "plan ready")
         fsm.transition(TaskStage.EXECUTION, "coding", ExpectedAction.TOOL_EXECUTION)
         val state = fsm.getState()
 
@@ -72,9 +73,11 @@ class TaskStateStorageTest {
         assertEquals(TaskStage.EXECUTION, loaded.stage)
         assertEquals("coding", loaded.currentStep)
         assertEquals(ExpectedAction.TOOL_EXECUTION, loaded.expectedAction)
-        assertEquals(1, loaded.history.size)
+        assertEquals(2, loaded.history.size)
         assertEquals(TaskStage.PLANNING, loaded.history[0].fromStage)
-        assertEquals(TaskStage.EXECUTION, loaded.history[0].toStage)
+        assertEquals(TaskStage.PLAN_APPROVED, loaded.history[0].toStage)
+        assertEquals(TaskStage.PLAN_APPROVED, loaded.history[1].fromStage)
+        assertEquals(TaskStage.EXECUTION, loaded.history[1].toStage)
     }
 
     @Test

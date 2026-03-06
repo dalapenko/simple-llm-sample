@@ -298,6 +298,7 @@ class CliOutput(private val terminal: Terminal) {
 
     private fun stageColor(stage: TaskStage): (String) -> String = when (stage) {
         TaskStage.PLANNING -> { s -> yellow(s) }
+        TaskStage.PLAN_APPROVED -> { s -> magenta(s) }
         TaskStage.EXECUTION -> { s -> cyan(s) }
         TaskStage.VALIDATION -> { s -> blue(s) }
         TaskStage.DONE -> { s -> green(s) }
