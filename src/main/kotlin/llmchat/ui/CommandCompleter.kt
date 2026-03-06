@@ -59,7 +59,7 @@ class CommandCompleter(private val strategyType: StrategyType) : Completer {
                 "/invariant" -> listOf("add", "list", "remove", "clear")
                 "/memory" -> listOf("add", "list", "delete", "clear")
                 "/profile" -> listOf("show", "path", "reload")
-                "/task" -> listOf("start", "status", "pause", "done", "cancel", "advance", "step")
+                "/task" -> listOf("start", "status", "pause", "done", "cancel", "advance", "step", "auto")
                 else -> emptyList()
             }
             subCommands

@@ -290,6 +290,26 @@ class CliOutput(private val terminal: Terminal) {
         terminal.println()
     }
 
+    fun printTransitionProposal(proposal: llmchat.agent.task.TaskTransitionProposal, requiresApproval: Boolean) {
+        val stageColor = stageColor(proposal.targetStage)
+        terminal.println()
+        terminal.println(magenta(bold(" ⟳ Task Transition Proposed")))
+        terminal.println(dim("─".repeat(50)))
+        terminal.println("  ${dim("Target:")} ${stageColor(proposal.targetStage.displayName)}")
+        terminal.println("  ${dim("Step:")}   ${proposal.step}")
+        terminal.println("  ${dim("Reason:")} ${proposal.reason}")
+        if (requiresApproval) {
+            terminal.println(dim("─".repeat(50)))
+            terminal.println("  ${yellow("Approval required.")} Type ${bold("y")} to proceed or ${bold("n")} to reject.")
+        }
+        terminal.println(dim("─".repeat(50)))
+    }
+
+    fun printAutoMode(enabled: Boolean) {
+        val label = if (enabled) green(bold("ON")) else dim("OFF")
+        terminal.println(dim("  Autonomous mode: ") + label)
+    }
+
     fun printTaskTransition(from: TaskStage, to: TaskStage) {
         val fromColor = stageColor(from)
         val toColor = stageColor(to)

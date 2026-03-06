@@ -93,6 +93,9 @@ sealed class Command {
     /** Update the current step description (and optionally expected action). */
     data class TaskStep(val description: String, val action: ExpectedAction?) : Command()
 
+    /** Toggle autonomous task-transition mode on or off. Null = show current status. */
+    data class TaskAuto(val enabled: Boolean?) : Command()
+
     // ── Invariant commands ─────────────────────────────────────────────────────
 
     /** Add a new project invariant constraint. */
@@ -279,6 +282,13 @@ sealed class Command {
                             remainder
                         }
                         TaskStep(desc, action)
+                    }
+
+                    "auto" -> when (parts.getOrNull(2)?.lowercase()) {
+                        "on"  -> TaskAuto(true)
+                        "off" -> TaskAuto(false)
+                        null  -> TaskAuto(null)
+                        else  -> Unknown("/task auto requires 'on' or 'off'")
                     }
 
                     else -> Unknown(input)

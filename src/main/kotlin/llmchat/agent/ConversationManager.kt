@@ -5,6 +5,7 @@ import llmchat.agent.context.ContextStrategy
 import llmchat.agent.invariant.InvariantStorage
 import llmchat.agent.profile.ProfileManager
 import llmchat.agent.task.TaskFSM
+import llmchat.agent.task.TaskTransitionProposal
 
 /**
  * Orchestrates conversation turns: builds the enriched system prompt,
@@ -13,6 +14,11 @@ import llmchat.agent.task.TaskFSM
  *
  * The manager is intentionally strategy-agnostic: it never inspects the
  * internal state of [strategy]; it only calls the interface methods.
+ *
+ * In autonomous mode ([autoMode] = true) the manager parses
+ * [TASK_TRANSITION]…[/TASK_TRANSITION] blocks emitted by the LLM,
+ * strips them from the visible response, and surfaces them as
+ * [RequestStatistics.transitionProposal] so the caller can act on them.
  */
 class ConversationManager(
     private val agentFactory: (systemPrompt: String) -> AIAgent<String, String>,
@@ -23,10 +29,17 @@ class ConversationManager(
     private var baseSystemPrompt: String =
         "You are a helpful assistant. Answer user questions concisely."
     private var taskFsm: TaskFSM? = null
+    private var autoMode: Boolean = false
 
     fun setTaskFsm(fsm: TaskFSM?) {
         taskFsm = fsm
     }
+
+    fun setAutoMode(enabled: Boolean) {
+        autoMode = enabled
+    }
+
+    fun isAutoMode(): Boolean = autoMode
 
     suspend fun sendMessage(userMessage: String): ChatResult<RequestStatistics> {
         return try {
@@ -36,7 +49,12 @@ class ConversationManager(
             val inputTokens = TokenCounter.estimate(userMessage)
             val statsBeforeTurn = strategy.estimateTokenStats()
 
-            val response = agent.run(userMessage)
+            val rawResponse = agent.run(userMessage)
+
+            // In auto mode: parse and strip the transition marker before storing history
+            val proposal = if (autoMode) parseTransitionProposal(rawResponse) else null
+            val response = if (proposal != null) stripTransitionMarker(rawResponse) else rawResponse
+
             val responseTokens = TokenCounter.estimate(response)
 
             // Post-turn: add to history (may trigger async side-effects like fact extraction)
@@ -54,7 +72,8 @@ class ConversationManager(
                     windowTokens = statsBeforeTurn.primary,
                     summaryTokens = statsBeforeTurn.secondary,
                     responseTokens = responseTokens,
-                    longTermTokens = statsBeforeTurn.tertiary
+                    longTermTokens = statsBeforeTurn.tertiary,
+                    transitionProposal = proposal
                 )
             )
         } catch (e: Exception) {
@@ -62,11 +81,23 @@ class ConversationManager(
         }
     }
 
+    private fun parseTransitionProposal(response: String): TaskTransitionProposal? {
+        val match = TRANSITION_REGEX.find(response) ?: return null
+        val stageName = match.groupValues[1].uppercase()
+        val step = match.groupValues[2].trim()
+        val reason = match.groupValues[3].trim()
+        val stage = llmchat.agent.task.TaskStage.entries.find { it.name == stageName } ?: return null
+        return TaskTransitionProposal(targetStage = stage, step = step, reason = reason)
+    }
+
+    private fun stripTransitionMarker(response: String): String =
+        TRANSITION_REGEX.replace(response, "").trimEnd()
+
     private fun buildSystemPrompt(): String {
         val invariantBlock = invariantStorage.buildPromptBlock()
         val profileBlock = profileManager.buildPromptBlock()
         val contextBlock = strategy.buildContextBlock()
-        val taskBlock = taskFsm?.buildResumptionContext() ?: ""
+        val taskBlock = taskFsm?.buildResumptionContext(autoMode) ?: ""
         return buildString {
             append(baseSystemPrompt)
             // Invariants first: constraints must appear before any other context
@@ -105,5 +136,12 @@ class ConversationManager(
 
     fun displayHistory() {
         strategy.displayHistory()
+    }
+
+    companion object {
+        private val TRANSITION_REGEX = Regex(
+            """\[TASK_TRANSITION\]\s*\nto:\s*(\S+)\s*\nstep:\s*(.*?)\s*\nreason:\s*(.*?)\s*\[/TASK_TRANSITION\]""",
+            setOf(RegexOption.DOT_MATCHES_ALL)
+        )
     }
 }

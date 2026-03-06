@@ -14,6 +14,7 @@ import llmchat.agent.profile.ProfileManager
 import llmchat.agent.task.TaskFSM
 import llmchat.agent.task.TaskStage
 import llmchat.agent.task.TaskStateStorage
+import llmchat.agent.task.TaskTransitionProposal
 import llmchat.cli.CliParser
 import llmchat.cli.Command
 import llmchat.cli.StrategyType
@@ -452,7 +453,49 @@ suspend fun startInteractiveCli(
                 output.printInfo("Type /help for available commands.")
             }
 
-            is Command.Message -> handleMessage(conversationManager, command.content, output, spinner, scope)
+            is Command.TaskAuto -> {
+                if (taskFsm == null) {
+                    output.printError("No active task. Use /task start <description> first.")
+                } else if (command.enabled == null) {
+                    output.printAutoMode(conversationManager.isAutoMode())
+                } else {
+                    conversationManager.setAutoMode(command.enabled)
+                    output.printAutoMode(command.enabled)
+                }
+            }
+
+            is Command.Message -> {
+                val proposal = handleMessage(conversationManager, command.content, output, spinner, scope)
+                val fsm = taskFsm
+                if (proposal != null && fsm != null) {
+                    val requiresApproval = proposal.targetStage.requiredApproval ==
+                            llmchat.agent.task.ExpectedAction.USER_APPROVAL
+                    output.printTransitionProposal(proposal, requiresApproval)
+
+                    val proceed = if (requiresApproval) {
+                        val answer = inputReader.readInput(
+                            terminal.theme.style("prompt")(" Apply transition? [y/N]: ")
+                                .ifEmpty { " Apply transition? [y/N]: " }
+                        )?.trim()?.lowercase()
+                        answer == "y" || answer == "yes"
+                    } else {
+                        true
+                    }
+
+                    if (proceed) {
+                        val prevStage = fsm.getState().stage
+                        fsm.transition(proposal.targetStage, proposal.step).fold(
+                            onSuccess = { state ->
+                                output.printTaskTransition(prevStage, proposal.targetStage)
+                                output.printTaskStatus(state)
+                            },
+                            onFailure = { e -> output.printError(e.message ?: "Transition failed") }
+                        )
+                    } else {
+                        output.printInfo("Transition rejected.")
+                    }
+                }
+            }
         }
     }
 
@@ -465,8 +508,8 @@ suspend fun handleMessage(
     output: CliOutput,
     spinner: ThinkingSpinner,
     scope: CoroutineScope
-) {
-    try {
+): TaskTransitionProposal? {
+    return try {
         spinner.start(scope)
 
         val result = conversationManager.sendMessage(message)
@@ -484,15 +527,18 @@ suspend fun handleMessage(
                     totalTokens = stats.totalTokens,
                     longTermTokens = stats.longTermTokens
                 )
+                stats.transitionProposal
             },
             onFailure = { error ->
                 output.printError("Error communicating with LLM: ${error.message}")
                 output.printInfo("Please try again or type /exit to quit.")
+                null
             }
         )
     } catch (e: Exception) {
         spinner.stop()
         output.printError("Unexpected error: ${e.message}")
         output.printInfo("Please try again or type /exit to quit.")
+        null
     }
 }

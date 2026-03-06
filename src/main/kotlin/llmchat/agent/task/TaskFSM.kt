@@ -92,18 +92,45 @@ class TaskFSM(
         return state
     }
 
-    fun buildResumptionContext(): String {
+    fun buildResumptionContext(autoMode: Boolean = false): String {
         val s = state
-        return """
-[ACTIVE TASK]
-Task: ${s.taskDescription}
-Stage: ${s.stage.name} (${s.stage.displayName})
-Current Step: ${s.currentStep}
-Expected Next Action: ${s.expectedAction.name}
-
-You are resuming this task exactly where it left off. Do not ask the user to recap.
-Continue from the current step. The conversation history above provides context.
-[END ACTIVE TASK]""".trimIndent()
+        val allowed = validTransitions[s.stage] ?: emptySet()
+        return buildString {
+            appendLine("[ACTIVE TASK]")
+            appendLine("Task: ${s.taskDescription}")
+            appendLine("Stage: ${s.stage.name} (${s.stage.displayName})")
+            appendLine("Current Step: ${s.currentStep}")
+            append("Expected Next Action: ${s.expectedAction.name}")
+            if (autoMode) {
+                val approvalRequired = allowed
+                    .filter { it.requiredApproval == ExpectedAction.USER_APPROVAL }
+                    .joinToString(", ") { it.name }
+                appendLine()
+                appendLine()
+                appendLine("You are operating in AUTONOMOUS mode.")
+                appendLine("When you believe the current stage objectives are fully complete,")
+                appendLine("append a transition proposal at the very END of your response:")
+                appendLine()
+                appendLine("[TASK_TRANSITION]")
+                appendLine("to: <STAGE_NAME>")
+                appendLine("step: <brief description of what was accomplished in this stage>")
+                appendLine("reason: <why this stage is complete>")
+                appendLine("[/TASK_TRANSITION]")
+                appendLine()
+                appendLine("Allowed next stages: ${allowed.joinToString(", ") { it.name }}")
+                if (approvalRequired.isNotEmpty()) {
+                    appendLine("Stages requiring user approval before execution: $approvalRequired")
+                }
+                append("Do NOT propose a transition unless the stage objectives are genuinely complete.")
+            } else {
+                appendLine()
+                appendLine()
+                appendLine("You are resuming this task exactly where it left off. Do not ask the user to recap.")
+                append("Continue from the current step. The conversation history above provides context.")
+            }
+            appendLine()
+            append("[END ACTIVE TASK]")
+        }
     }
 
     companion object {
