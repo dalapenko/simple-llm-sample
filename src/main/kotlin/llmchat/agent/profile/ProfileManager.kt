@@ -49,7 +49,7 @@ class ProfileManager(
 
     /** Estimates the token cost of the profile block (0 when profile is absent). */
     fun estimateTokens(): Int {
-        val p = profile ?: return 0
+        profile ?: return 0
         return TokenCounter.estimate(buildPromptBlock())
     }
 

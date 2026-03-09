@@ -121,6 +121,20 @@ sealed class Command {
     /** Reload profile.md from disk without restarting. */
     data object ProfileReload : Command()
 
+    // ── MCP commands ───────────────────────────────────────────────────────────
+
+    /** Connect to an MCP server by launching [command] with [args] via stdio. */
+    data class McpConnect(val command: String, val args: List<String>) : Command()
+
+    /** List tools from the connected MCP server. */
+    data object McpTools : Command()
+
+    /** Show MCP connection status. */
+    data object McpStatus : Command()
+
+    /** Disconnect from the current MCP server. */
+    data object McpDisconnect : Command()
+
     // ── Parsing ────────────────────────────────────────────────────────────────
 
     companion object {
@@ -333,6 +347,21 @@ sealed class Command {
                     null, "show" -> ProfileShow
                     "path" -> ProfilePath
                     "reload" -> ProfileReload
+                    else -> Unknown(input)
+                }
+
+                // MCP commands
+                "/mcp" -> when (parts.getOrNull(1)) {
+                    "connect" -> {
+                        val allParts = input.split("\\s+".toRegex())
+                        val mcpCommand = allParts.getOrNull(2)
+                            ?: return Unknown("/mcp connect requires a command (e.g. /mcp connect npx -y @modelcontextprotocol/server-filesystem .)")
+                        val mcpArgs = allParts.drop(3)
+                        McpConnect(mcpCommand, mcpArgs)
+                    }
+                    "tools" -> McpTools
+                    "disconnect" -> McpDisconnect
+                    null, "status" -> McpStatus
                     else -> Unknown(input)
                 }
 

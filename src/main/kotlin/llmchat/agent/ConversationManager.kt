@@ -1,8 +1,10 @@
 package llmchat.agent
 
 import ai.koog.agents.core.agent.AIAgent
+import ai.koog.agents.core.tools.ToolRegistry
 import llmchat.agent.context.ContextStrategy
 import llmchat.agent.invariant.InvariantStorage
+import llmchat.agent.mcp.McpConnectionManager
 import llmchat.agent.profile.ProfileManager
 import llmchat.agent.task.TaskFSM
 import llmchat.agent.task.TaskTransitionProposal
@@ -21,7 +23,7 @@ import llmchat.agent.task.TaskTransitionProposal
  * [RequestStatistics.transitionProposal] so the caller can act on them.
  */
 class ConversationManager(
-    private val agentFactory: (systemPrompt: String) -> AIAgent<String, String>,
+    private val agentFactory: (systemPrompt: String, toolRegistry: ToolRegistry) -> AIAgent<String, String>,
     val strategy: ContextStrategy,
     val profileManager: ProfileManager = ProfileManager(),
     val invariantStorage: InvariantStorage = InvariantStorage()
@@ -30,6 +32,18 @@ class ConversationManager(
         "You are a helpful assistant. Answer user questions concisely."
     private var taskFsm: TaskFSM? = null
     private var autoMode: Boolean = false
+    private var mcpToolRegistry: ToolRegistry = ToolRegistry.EMPTY
+    private var mcpConnectionInfo: McpConnectionManager.ConnectionInfo? = null
+
+    fun setMcpToolRegistry(registry: ToolRegistry, connectionInfo: McpConnectionManager.ConnectionInfo) {
+        mcpToolRegistry = registry
+        mcpConnectionInfo = connectionInfo
+    }
+
+    fun clearMcpToolRegistry() {
+        mcpToolRegistry = ToolRegistry.EMPTY
+        mcpConnectionInfo = null
+    }
 
     fun setTaskFsm(fsm: TaskFSM?) {
         taskFsm = fsm
@@ -44,7 +58,7 @@ class ConversationManager(
     suspend fun sendMessage(userMessage: String): ChatResult<RequestStatistics> {
         return try {
             val enrichedSystemPrompt = buildSystemPrompt()
-            val agent = agentFactory(enrichedSystemPrompt)
+            val agent = agentFactory(enrichedSystemPrompt, mcpToolRegistry)
 
             val inputTokens = TokenCounter.estimate(userMessage)
             val statsBeforeTurn = strategy.estimateTokenStats()
@@ -98,6 +112,7 @@ class ConversationManager(
         val profileBlock = profileManager.buildPromptBlock()
         val contextBlock = strategy.buildContextBlock()
         val taskBlock = taskFsm?.buildResumptionContext(autoMode) ?: ""
+        val mcpBlock = mcpConnectionInfo?.buildPromptBlock() ?: ""
         return buildString {
             append(baseSystemPrompt)
             // Invariants first: constraints must appear before any other context
@@ -117,6 +132,10 @@ class ConversationManager(
             if (taskBlock.isNotEmpty()) {
                 append("\n\n")
                 append(taskBlock)
+            }
+            if (mcpBlock.isNotEmpty()) {
+                append("\n\n")
+                append(mcpBlock)
             }
         }
     }

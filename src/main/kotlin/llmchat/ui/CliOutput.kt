@@ -1,5 +1,6 @@
 package llmchat.ui
 
+import ai.koog.agents.core.tools.Tool
 import com.github.ajalt.mordant.markdown.Markdown
 import com.github.ajalt.mordant.rendering.TextColors.*
 import com.github.ajalt.mordant.rendering.TextStyles.bold
@@ -11,6 +12,7 @@ import llmchat.agent.invariant.Invariant
 import llmchat.agent.invariant.InvariantCategory
 import llmchat.agent.memory.MemoryItem
 import llmchat.agent.memory.MemoryLayer
+import llmchat.agent.mcp.McpConnectionManager
 import llmchat.agent.profile.ProfileManager
 import llmchat.agent.task.TaskStage
 import llmchat.agent.task.TaskState
@@ -110,6 +112,17 @@ class CliOutput(private val terminal: Terminal) {
             "/task pause" to "Save task state (resume on next startup)",
             "/task done" to "Mark task done and clear state",
             "/task cancel" to "Cancel and discard task state"
+        ).forEach { (cmd, desc) ->
+            terminal.println("  ${cyan(cmd.padEnd(30))} $desc")
+        }
+
+        terminal.println()
+        terminal.println(bold("MCP (Model Context Protocol):"))
+        listOf(
+            "/mcp connect <cmd> [args]" to "Connect to MCP server via stdio",
+            "/mcp tools"               to "List tools from connected server",
+            "/mcp status"              to "Show MCP connection status",
+            "/mcp disconnect"          to "Disconnect from MCP server"
         ).forEach { (cmd, desc) ->
             terminal.println("  ${cyan(cmd.padEnd(30))} $desc")
         }
@@ -347,6 +360,71 @@ class CliOutput(private val terminal: Terminal) {
             "${dim("[") + cyan(branchName) + dim("]")} "
         } else ""
         return "\n ${branch}${cyan(bold("You"))} ${dim(">")} "
+    }
+
+    // ── MCP commands ───────────────────────────────────────────────────────────
+
+    fun printMcpConnected(info: McpConnectionManager.ConnectionInfo, toolCount: Int) {
+        terminal.println()
+        terminal.println(green(bold(" MCP Connected")))
+        terminal.println(dim("─".repeat(60)))
+        terminal.println("  ${dim("Server:")} ${AnsiSanitizer.strip(info.commandLine)}")
+        terminal.println("  ${dim("Tools:")}  ${green("$toolCount available")}")
+        terminal.println(dim("─".repeat(60)))
+        terminal.println()
+    }
+
+    fun printMcpTools(tools: List<Tool<*, *>>) {
+        terminal.println()
+        terminal.println(bold(" MCP Tools"))
+        terminal.println(dim("─".repeat(60)))
+        if (tools.isEmpty()) {
+            terminal.println(dim("  (server exposes no tools)"))
+        } else {
+            tools.forEachIndexed { index, tool ->
+                val connector = if (index == tools.lastIndex) "└─" else "├─"
+                val name = AnsiSanitizer.strip(tool.name)
+                val desc = AnsiSanitizer.strip(tool.descriptor.description).let {
+                    if (it.length > 70) it.take(70) + "…" else it
+                }
+                terminal.println("  $connector ${cyan(name)}")
+                terminal.println("     ${dim(desc)}")
+
+                val required = tool.descriptor.requiredParameters
+                val optional = tool.descriptor.optionalParameters
+                val allParams = required.map { it to true } + optional.map { it to false }
+                allParams.forEachIndexed { pIdx, (param, isRequired) ->
+                    val isLastParam = pIdx == allParams.lastIndex
+                    val branch = if (isLastParam) "   └─" else "   ├─"
+                    val reqLabel = if (isRequired) "" else dim(" (optional)")
+                    terminal.println(
+                        "  $branch ${param.name.padEnd(16)} ${dim(param.type.name.lowercase().padEnd(8))} " +
+                                "${dim(param.description)}$reqLabel"
+                    )
+                }
+            }
+        }
+        terminal.println(dim("─".repeat(60)))
+        terminal.println()
+    }
+
+    fun printMcpStatus(info: McpConnectionManager.ConnectionInfo?) {
+        terminal.println()
+        terminal.println(bold(" MCP Status"))
+        terminal.println(dim("─".repeat(60)))
+        if (info == null) {
+            terminal.println("  ${dim("Status:")}  ${yellow("not connected")}")
+            terminal.println(dim("  Use: /mcp connect <command> [args...]"))
+        } else {
+            terminal.println("  ${dim("Status:")}  ${green("connected")}")
+            terminal.println("  ${dim("Command:")} ${AnsiSanitizer.strip(info.commandLine)}")
+        }
+        terminal.println(dim("─".repeat(60)))
+        terminal.println()
+    }
+
+    fun printMcpDisconnected() {
+        terminal.println(dim("  MCP server disconnected."))
     }
 
     // ── Legacy stubs (kept for backward compatibility during transition) ────────

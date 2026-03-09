@@ -1,6 +1,7 @@
 package llmchat
 
 import ai.koog.agents.core.agent.AIAgent
+import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.prompt.executor.llms.all.simpleOpenRouterExecutor
 import com.github.ajalt.mordant.terminal.Terminal
 import kotlinx.coroutines.CoroutineScope
@@ -9,6 +10,7 @@ import llmchat.agent.ConversationManager
 import llmchat.agent.ConversationStorage
 import llmchat.agent.context.*
 import llmchat.agent.invariant.InvariantStorage
+import llmchat.agent.mcp.McpConnectionManager
 import llmchat.agent.memory.MemoryLayer
 import llmchat.agent.profile.ProfileManager
 import llmchat.agent.task.TaskFSM
@@ -70,10 +72,12 @@ suspend fun startInteractiveCli(
 ) {
     val inputReader = ChatInputReader(config.strategyType)
     val spinner = ThinkingSpinner(terminal)
+    val mcpManager = McpConnectionManager()
     var taskFsm: TaskFSM? = null
 
     Runtime.getRuntime().addShutdownHook(Thread {
         inputReader.close()
+        mcpManager.destroy()
         taskFsm?.let { fsm ->
             if (fsm.getState().stage != TaskStage.DONE) {
                 TaskStateStorage.save(fsm.getState())
@@ -84,12 +88,13 @@ suspend fun startInteractiveCli(
 
     val promptExecutor = simpleOpenRouterExecutor(apiKey)
 
-    val agentFactory: (String) -> AIAgent<String, String> = { systemPrompt ->
+    val agentFactory: (String, ToolRegistry) -> AIAgent<String, String> = { systemPrompt, toolRegistry ->
         AIAgent(
             promptExecutor = promptExecutor,
             systemPrompt = systemPrompt,
             llmModel = config.model.openRouterModel,
-            temperature = config.temperature
+            temperature = config.temperature,
+            toolRegistry = toolRegistry
         )
     }
 
@@ -100,7 +105,7 @@ suspend fun startInteractiveCli(
         StrategyType.STICKY_FACTS ->
             StickyFactsStrategy(
                 windowSize = config.contextWindow.windowSize,
-                agentFactory = agentFactory
+                agentFactory = { systemPrompt -> agentFactory(systemPrompt, ToolRegistry.EMPTY) }
             )
 
         StrategyType.BRANCHING ->
@@ -446,6 +451,45 @@ suspend fun startInteractiveCli(
                 profileManager.reload()
                 val status = if (profileManager.getProfile() != null) "loaded" else "not active (file empty or missing)"
                 output.printInfo("Profile reloaded — $status.")
+            }
+
+            // ── MCP commands ───────────────────────────────────────────────
+
+            is Command.McpConnect -> {
+                spinner.start(scope, label = "Connecting to MCP server...")
+                try {
+                    val registry = mcpManager.connect(command.command, command.args)
+                    spinner.stop()
+                    val info = mcpManager.getConnectionInfo()!!
+                    conversationManager.setMcpToolRegistry(registry, info)
+                    output.printMcpConnected(info, registry.tools.size)
+                } catch (e: Exception) {
+                    spinner.stop()
+                    mcpManager.disconnect()
+                    output.printError("MCP connect failed: ${e.message}")
+                    output.printInfo("Check that the command is installed and accessible.")
+                }
+            }
+
+            is Command.McpTools -> {
+                val registry = mcpManager.getRegistry()
+                if (registry == null) {
+                    output.printError("Not connected to an MCP server. Use /mcp connect <command> first.")
+                } else {
+                    output.printMcpTools(registry.tools)
+                }
+            }
+
+            is Command.McpStatus -> output.printMcpStatus(mcpManager.getConnectionInfo())
+
+            is Command.McpDisconnect -> {
+                if (!mcpManager.isConnected) {
+                    output.printInfo("No MCP server connected.")
+                } else {
+                    mcpManager.disconnect()
+                    conversationManager.clearMcpToolRegistry()
+                    output.printMcpDisconnected()
+                }
             }
 
             is Command.Unknown -> {

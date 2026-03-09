@@ -14,6 +14,7 @@ repositories {
 
 dependencies {
     implementation("ai.koog:koog-agents:0.6.2")
+    implementation("ai.koog:agents-mcp:0.6.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
 
     // TUI: colored output, animated spinner
@@ -41,4 +42,8 @@ application {
 
 tasks.named<JavaExec>("run") {
     standardInput = System.`in`
+}
+
+tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
+    mergeServiceFiles()
 }

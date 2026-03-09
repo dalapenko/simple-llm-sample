@@ -23,14 +23,14 @@ class ThinkingSpinner(private val terminal: Terminal) {
     private var startTime: Long = 0L
 
     /** Start the spinner animation. Runs on [Dispatchers.IO]. */
-    fun start(scope: CoroutineScope) {
+    fun start(scope: CoroutineScope, label: String = "Thinking...") {
         startTime = System.currentTimeMillis()
         job = scope.launch(Dispatchers.IO) {
             var frameIndex = 0
             while (isActive) {
                 val elapsed = (System.currentTimeMillis() - startTime) / 1000
                 val frame = frames[frameIndex % frames.size]
-                val line = "  ${yellow(frame)} ${dim("Thinking...")} ${dim("${elapsed}s")}"
+                val line = "  ${yellow(frame)} ${dim(label)} ${dim("${elapsed}s")}"
                 // \r returns to start of line, \u001B[K clears to end of line
                 print("\r\u001B[K$line")
                 System.out.flush()
