@@ -46,7 +46,7 @@ This script will:
 
 Run the interactive CLI via Gradle:
 ```bash
-./gradlew run --console=plain
+./gradlew :cli-app:run --console=plain
 ```
 
 > **Note**: The `--console=plain` flag is recommended for better interactive experience.
@@ -55,20 +55,20 @@ Run the interactive CLI via Gradle:
 
 For the best interactive experience, you can build and run the JAR directly:
 ```bash
-./gradlew build
-java -jar build/libs/simple-llm-sample-1.0-SNAPSHOT.jar
+./gradlew :cli-app:shadowJar
+java -jar cli-app/build/libs/cli-app-1.0-SNAPSHOT-all.jar
 ```
 
 ### With Custom System Prompt
 
 ```bash
-./gradlew run --console=plain --args="--system-prompt 'You are a coding assistant specialized in Kotlin'"
+./gradlew :cli-app:run --console=plain --args="--system-prompt 'You are a coding assistant specialized in Kotlin'"
 ```
 
 ### Show Help
 
 ```bash
-./gradlew run --args="--help"
+./gradlew :cli-app:run --args="--help"
 ```
 
 ## Interactive Commands
@@ -118,11 +118,20 @@ Goodbye!
 
 ## Project Structure
 
+This is a multi-module Gradle project:
+
 ```
-src/main/kotlin/
-├── main.kt                  # Entry point with REPL loop
-├── CliConfig.kt            # CLI argument parsing
-└── ConversationManager.kt  # Conversation history management
+simple-llm-sample/
+├── cli-app/                         # CLI tool module
+│   ├── build.gradle.kts
+│   └── src/main/kotlin/llmchat/
+│       ├── Main.kt                  # Entry point with REPL loop
+│       ├── agent/                   # Conversation, memory, task, MCP
+│       ├── cli/                     # Argument parsing and commands
+│       ├── model/                   # Supported LLM models
+│       └── ui/                      # Terminal UI components
+├── build.gradle.kts                 # Root build (plugin version catalog)
+└── settings.gradle.kts              # Module declarations
 ```
 
 ## Command-Line Options
@@ -151,14 +160,14 @@ If the application exits immediately without showing the welcome message, try on
 
 **Solution 2**: Run the JAR directly (recommended for best experience):
 ```bash
-./gradlew build
-java -jar build/libs/simple-llm-sample-1.0-SNAPSHOT.jar
+./gradlew :cli-app:shadowJar
+java -jar cli-app/build/libs/cli-app-1.0-SNAPSHOT-all.jar
 ```
 
 **Solution 3**: Use the distribution scripts:
 ```bash
-./gradlew installDist
-./build/install/simple-llm-sample/bin/simple-llm-sample
+./gradlew :cli-app:installDist
+./cli-app/build/install/cli-app/bin/cli-app
 ```
 
 ### "OPENROUTER_API_KEY environment variable is not set"

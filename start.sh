@@ -68,7 +68,7 @@ echo "🤖 Model: $MODEL"
 echo "🌡️  Temperature: $TEMPERATURE"
 echo ""
 echo "Building application..."
-./gradlew build --console=plain -q
+./gradlew :cli-app:shadowJar --console=plain -q
 
 echo ""
 echo "✅ Build successful!"
@@ -78,4 +78,4 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # Run the JAR with parameters
-java -jar build/libs/simple-llm-sample-1.0-SNAPSHOT-all.jar --temperature "$TEMPERATURE" --model "$MODEL"
+java -jar cli-app/build/libs/cli-app-1.0-SNAPSHOT-all.jar --temperature "$TEMPERATURE" --model "$MODEL"
