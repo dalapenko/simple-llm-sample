@@ -1,6 +1,6 @@
 package llmchat.agent.context
 
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -34,7 +34,7 @@ class BranchingStrategyTest {
     // ── addMessage ───────────────────────────────────────────────────────────
 
     @Test
-    fun `addMessage appends exchange to current branch`() = runBlocking {
+    fun `addMessage appends exchange to current branch`() = runTest {
         val s = BranchingStrategy()
         s.addMessage("question", "answer")
         assertEquals(1, s.currentBranch.messages.size)
@@ -49,7 +49,7 @@ class BranchingStrategyTest {
     }
 
     @Test
-    fun `buildContextBlock includes branch name and messages`() = runBlocking {
+    fun `buildContextBlock includes branch name and messages`() = runTest {
         val s = BranchingStrategy()
         s.addMessage("hello", "hi")
         val block = s.buildContextBlock()
@@ -59,7 +59,7 @@ class BranchingStrategyTest {
     }
 
     @Test
-    fun `buildContextBlock respects windowSize`() = runBlocking {
+    fun `buildContextBlock respects windowSize`() = runTest {
         val s = BranchingStrategy(windowSize = 2)
         repeat(4) { i -> s.addMessage("q$i", "a$i") }
         val block = s.buildContextBlock()
@@ -72,7 +72,7 @@ class BranchingStrategyTest {
     // ── clearHistory ─────────────────────────────────────────────────────────
 
     @Test
-    fun `clearHistory resets to main branch only`() = runBlocking {
+    fun `clearHistory resets to main branch only`() = runTest {
         val s = BranchingStrategy()
         s.addMessage("q", "a")
         s.createBranch("feature")
@@ -87,7 +87,7 @@ class BranchingStrategyTest {
     // ── loadMessages ─────────────────────────────────────────────────────────
 
     @Test
-    fun `loadMessages loads into main branch and switches to it`() = runBlocking {
+    fun `loadMessages loads into main branch and switches to it`() = runTest {
         val s = BranchingStrategy()
         s.createBranch("other")
         s.loadMessages(listOf("restored q" to "restored a"))
@@ -98,7 +98,7 @@ class BranchingStrategyTest {
     // ── createBranch ─────────────────────────────────────────────────────────
 
     @Test
-    fun `createBranch creates new branch and switches to it`() = runBlocking {
+    fun `createBranch creates new branch and switches to it`() = runTest {
         val s = BranchingStrategy()
         s.addMessage("q", "a")
         val branch = s.createBranch("feature")
@@ -108,7 +108,7 @@ class BranchingStrategyTest {
     }
 
     @Test
-    fun `createBranch without checkpoint seeds from current branch messages`() = runBlocking {
+    fun `createBranch without checkpoint seeds from current branch messages`() = runTest {
         val s = BranchingStrategy()
         s.addMessage("shared q", "shared a")
         val branch = s.createBranch("fork")
@@ -117,7 +117,7 @@ class BranchingStrategyTest {
     }
 
     @Test
-    fun `createBranch from checkpoint seeds correct messages`() = runBlocking {
+    fun `createBranch from checkpoint seeds correct messages`() = runTest {
         val s = BranchingStrategy()
         s.addMessage("q0", "a0")
         s.addMessage("q1", "a1")
@@ -131,7 +131,7 @@ class BranchingStrategyTest {
     }
 
     @Test
-    fun `createBranch throws for duplicate name`() = runBlocking {
+    fun `createBranch throws for duplicate name`() = runTest {
         val s = BranchingStrategy()
         s.createBranch("feature")
         assertFailsWith<IllegalArgumentException> {
@@ -156,7 +156,7 @@ class BranchingStrategyTest {
     // ── switchBranch ─────────────────────────────────────────────────────────
 
     @Test
-    fun `switchBranch by name changes current branch`() = runBlocking {
+    fun `switchBranch by name changes current branch`() = runTest {
         val s = BranchingStrategy()
         s.createBranch("feature")
         s.switchBranch("main")
@@ -164,7 +164,7 @@ class BranchingStrategyTest {
     }
 
     @Test
-    fun `switchBranch by id changes current branch`() = runBlocking {
+    fun `switchBranch by id changes current branch`() = runTest {
         val s = BranchingStrategy()
         val branch = s.createBranch("feature")
         s.switchBranch("main")
@@ -182,7 +182,7 @@ class BranchingStrategyTest {
     // ── saveCheckpoint ───────────────────────────────────────────────────────
 
     @Test
-    fun `saveCheckpoint records current message count`() = runBlocking {
+    fun `saveCheckpoint records current message count`() = runTest {
         val s = BranchingStrategy()
         s.addMessage("q1", "a1")
         s.addMessage("q2", "a2")
@@ -200,7 +200,7 @@ class BranchingStrategyTest {
     }
 
     @Test
-    fun `multiple checkpoints are listed in order`() = runBlocking {
+    fun `multiple checkpoints are listed in order`() = runTest {
         val s = BranchingStrategy()
         s.addMessage("q", "a")
         s.saveCheckpoint("cp1")
@@ -220,7 +220,7 @@ class BranchingStrategyTest {
     }
 
     @Test
-    fun `estimateTokenStats counts tokens in current branch`() = runBlocking {
+    fun `estimateTokenStats counts tokens in current branch`() = runTest {
         val s = BranchingStrategy()
         s.addMessage("aaaa", "bbbb") // 1 + 1 = 2 tokens
         val stats = s.estimateTokenStats()
@@ -228,7 +228,7 @@ class BranchingStrategyTest {
     }
 
     @Test
-    fun `estimateTokenStats reflects current branch after switch`() = runBlocking {
+    fun `estimateTokenStats reflects current branch after switch`() = runTest {
         val s = BranchingStrategy()
         s.addMessage("aaaa", "bbbb") // 2 tokens in main
         s.createBranch("empty-branch")

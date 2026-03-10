@@ -1,6 +1,6 @@
 package llmchat.agent.context
 
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 class SlidingWindowStrategyTest {
 
     @Test
-    fun `addMessage stores exchange in history`() = runBlocking {
+    fun `addMessage stores exchange in history`() = runTest {
         val s = SlidingWindowStrategy(windowSize = 5)
         s.addMessage("hello", "hi there")
         assertEquals(listOf("hello" to "hi there"), s.getMessages())
@@ -23,7 +23,7 @@ class SlidingWindowStrategyTest {
     }
 
     @Test
-    fun `buildContextBlock contains user and assistant text`() = runBlocking {
+    fun `buildContextBlock contains user and assistant text`() = runTest {
         val s = SlidingWindowStrategy()
         s.addMessage("What is 2+2?", "It is 4.")
         val block = s.buildContextBlock()
@@ -32,7 +32,7 @@ class SlidingWindowStrategyTest {
     }
 
     @Test
-    fun `buildContextBlock includes window size info`() = runBlocking {
+    fun `buildContextBlock includes window size info`() = runTest {
         val s = SlidingWindowStrategy(windowSize = 5)
         s.addMessage("q", "a")
         val block = s.buildContextBlock()
@@ -40,7 +40,7 @@ class SlidingWindowStrategyTest {
     }
 
     @Test
-    fun `clearHistory removes all messages`() = runBlocking {
+    fun `clearHistory removes all messages`() = runTest {
         val s = SlidingWindowStrategy()
         s.addMessage("q", "a")
         s.clearHistory()
@@ -49,7 +49,7 @@ class SlidingWindowStrategyTest {
     }
 
     @Test
-    fun `window evicts oldest message when full`() = runBlocking {
+    fun `window evicts oldest message when full`() = runTest {
         val s = SlidingWindowStrategy(windowSize = 3)
         repeat(5) { i -> s.addMessage("q$i", "a$i") }
         val messages = s.getMessages()
@@ -71,7 +71,7 @@ class SlidingWindowStrategyTest {
     }
 
     @Test
-    fun `loadMessages clears previous history`() = runBlocking {
+    fun `loadMessages clears previous history`() = runTest {
         val s = SlidingWindowStrategy(windowSize = 10)
         s.addMessage("old q", "old a")
         s.loadMessages(listOf("new q" to "new a"))
@@ -85,7 +85,7 @@ class SlidingWindowStrategyTest {
     }
 
     @Test
-    fun `estimateTokenStats counts tokens for all exchanges`() = runBlocking {
+    fun `estimateTokenStats counts tokens for all exchanges`() = runTest {
         val s = SlidingWindowStrategy()
         s.addMessage("aaaa", "bbbb") // 1 + 1 = 2 tokens
         val stats = s.estimateTokenStats()
@@ -95,7 +95,7 @@ class SlidingWindowStrategyTest {
     }
 
     @Test
-    fun `multiple messages accumulate in context block`() = runBlocking {
+    fun `multiple messages accumulate in context block`() = runTest {
         val s = SlidingWindowStrategy(windowSize = 10)
         s.addMessage("first question", "first answer")
         s.addMessage("second question", "second answer")
@@ -105,7 +105,7 @@ class SlidingWindowStrategyTest {
     }
 
     @Test
-    fun `context block does not include evicted messages`() = runBlocking {
+    fun `context block does not include evicted messages`() = runTest {
         val s = SlidingWindowStrategy(windowSize = 2)
         s.addMessage("evicted", "gone")
         s.addMessage("kept1", "ans1")

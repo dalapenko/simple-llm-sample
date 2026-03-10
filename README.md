@@ -122,16 +122,41 @@ This is a multi-module Gradle project:
 
 ```
 simple-llm-sample/
-├── cli-app/                         # CLI tool module
+├── cli-app/                                 # Interactive LLM chat CLI
 │   ├── build.gradle.kts
 │   └── src/main/kotlin/llmchat/
-│       ├── Main.kt                  # Entry point with REPL loop
-│       ├── agent/                   # Conversation, memory, task, MCP
-│       ├── cli/                     # Argument parsing and commands
-│       ├── model/                   # Supported LLM models
-│       └── ui/                      # Terminal UI components
-├── build.gradle.kts                 # Root build (plugin version catalog)
-└── settings.gradle.kts              # Module declarations
+│       ├── Main.kt                          # Entry point with REPL loop
+│       ├── agent/                           # Conversation, memory, task, MCP client
+│       ├── cli/                             # Argument parsing and commands
+│       ├── model/                           # Supported LLM models
+│       └── ui/                              # Terminal UI components
+├── mcp-server-jsonplaceholder/              # Standalone MCP server (JSONPlaceholder API)
+│   ├── build.gradle.kts
+│   └── src/main/kotlin/mcpserver/
+│       ├── Main.kt                          # Entry point (stdio loop)
+│       ├── McpServer.kt                     # JSON-RPC 2.0 lifecycle + tool dispatch
+│       ├── JsonPlaceholderClient.kt         # Ktor HTTP client
+│       └── Models.kt                        # Post, Comment data models
+├── build.gradle.kts                         # Root build (plugin version catalog)
+└── settings.gradle.kts                      # Module declarations
+```
+
+### MCP Server
+
+The `mcp-server-jsonplaceholder` module is a standalone executable that implements the
+[Model Context Protocol](https://modelcontextprotocol.io) over stdio. It exposes three tools:
+
+| Tool | Description |
+|------|-------------|
+| `get_posts` | Fetches posts, optionally filtered by `userId` |
+| `get_post_details` | Fetches a single post by `postId` |
+| `get_comments` | Fetches comments for a post by `postId` |
+
+Build and connect it from the CLI:
+```bash
+./gradlew :mcp-server-jsonplaceholder:shadowJar
+# Inside the CLI:
+/mcp connect java -jar mcp-server-jsonplaceholder/build/libs/mcp-server-jsonplaceholder-1.0-SNAPSHOT-all.jar
 ```
 
 ## Command-Line Options

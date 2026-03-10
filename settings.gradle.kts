@@ -4,3 +4,4 @@ plugins {
 rootProject.name = "simple-llm-sample"
 
 include(":cli-app")
+include(":mcp-server-jsonplaceholder")

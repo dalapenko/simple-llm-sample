@@ -1,6 +1,6 @@
 package llmchat.agent.context
 
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import llmchat.agent.memory.LongTermStore
 import llmchat.agent.memory.MemoryLayer
 import llmchat.agent.memory.ShortTermStore
@@ -64,7 +64,7 @@ class LayeredMemoryStrategyTest {
     }
 
     @Test
-    fun `buildContextBlock includes conversation exchanges`() = runBlocking {
+    fun `buildContextBlock includes conversation exchanges`() = runTest {
         val s = strategy()
         s.addMessage("What is Kotlin?", "Kotlin is a JVM language.")
         val block = s.buildContextBlock()
@@ -74,7 +74,7 @@ class LayeredMemoryStrategyTest {
     }
 
     @Test
-    fun `buildContextBlock ordering is long-term then work then short-term then conversation`() = runBlocking {
+    fun `buildContextBlock ordering is long-term then work then short-term then conversation`() = runTest {
         val s = strategy()
         s.addToLayer(MemoryLayer.LONG_TERM, "LT fact")
         s.addToLayer(MemoryLayer.WORK, "Work note")
@@ -95,7 +95,7 @@ class LayeredMemoryStrategyTest {
     // ── Layer isolation ─────────────────────────────────────────────────────
 
     @Test
-    fun `clearHistory clears conversation and short-term and work but not long-term`() = runBlocking {
+    fun `clearHistory clears conversation and short-term and work but not long-term`() = runTest {
         val s = strategy()
         s.addMessage("q", "a")
         s.addToLayer(MemoryLayer.SHORT_TERM, "note")
@@ -147,7 +147,7 @@ class LayeredMemoryStrategyTest {
     // ── Sliding window behaviour ─────────────────────────────────────────────
 
     @Test
-    fun `conversation window respects windowSize`() = runBlocking {
+    fun `conversation window respects windowSize`() = runTest {
         val s = strategy() // windowSize = 3
         repeat(5) { i -> s.addMessage("q$i", "a$i") }
         val block = s.buildContextBlock()
@@ -180,7 +180,7 @@ class LayeredMemoryStrategyTest {
     }
 
     @Test
-    fun `estimateTokenStats separates layers correctly`() = runBlocking {
+    fun `estimateTokenStats separates layers correctly`() = runTest {
         val s = strategy()
         s.addMessage("hello world", "hi there") // → primary
         s.addToLayer(MemoryLayer.WORK, "task context text") // → secondary
