@@ -3,6 +3,10 @@ package llmchat.agent.mcp
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.mcp.McpToolRegistryProvider
 import ai.koog.agents.mcp.defaultStdioTransport
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import java.io.File
 
 /**
@@ -15,6 +19,11 @@ import java.io.File
  *
  * Security: uses ProcessBuilder(List) not Runtime.exec(String) to prevent shell injection.
  * stderr is kept separate (redirectErrorStream=false) to avoid JSON-RPC parse errors.
+ *
+ * Push notifications:
+ *   The server may emit "[NOTIFY] title\tdescription" lines on stderr.
+ *   Register a handler via [setNotificationHandler] to receive them.
+ *   The handler is called on a background IO thread.
  */
 class McpConnectionManager {
 
@@ -46,6 +55,8 @@ class McpConnectionManager {
     private var process: Process? = null
     private var registry: ToolRegistry? = null
     private var connectionInfo: ConnectionInfo? = null
+    private var stderrJob: Job? = null
+    private var notificationHandler: ((title: String, description: String) -> Unit)? = null
 
     val isConnected: Boolean get() = process?.isAlive == true
 
@@ -54,8 +65,19 @@ class McpConnectionManager {
     fun getConnectionInfo(): ConnectionInfo? = connectionInfo
 
     /**
+     * Register a callback to receive push notifications from the MCP server.
+     * The server emits "[NOTIFY] title\tdescription" on stderr; this handler is called
+     * for each such line on a background IO thread.
+     */
+    fun setNotificationHandler(handler: (title: String, description: String) -> Unit) {
+        notificationHandler = handler
+    }
+
+    /**
      * Spawns [command] with [args], performs the MCP initialize handshake via stdio,
      * retrieves the tool list, and returns the populated [ToolRegistry].
+     *
+     * Also starts a background coroutine reading stderr for [NOTIFY] lines.
      *
      * Throws on process start failure or MCP protocol error.
      * Caller must catch and call [disconnect] on failure to clean up.
@@ -79,6 +101,27 @@ class McpConnectionManager {
         val proc = pb.start()
         process = proc
 
+        // Read stderr in the background — parse [NOTIFY] lines and fire the handler
+        stderrJob = CoroutineScope(Dispatchers.IO).launch {
+            try {
+                proc.errorStream.bufferedReader().forEachLine { line ->
+                    if (line.startsWith("[NOTIFY] ")) {
+                        val payload = line.removePrefix("[NOTIFY] ")
+                        val tab = payload.indexOf('\t')
+                        val title = if (tab >= 0) payload.substring(0, tab) else payload
+                        val description = if (tab >= 0) payload.substring(tab + 1) else ""
+                        try {
+                            notificationHandler?.invoke(title, description)
+                        } catch (_: Exception) {
+                            // Handler failed for this notification — continue reading
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                // stderr stream closed (process exited)
+            }
+        }
+
         val transport = McpToolRegistryProvider.defaultStdioTransport(proc)
         val reg = McpToolRegistryProvider.fromTransport(transport)
 
@@ -99,6 +142,8 @@ class McpConnectionManager {
     }
 
     private fun destroyProcess() {
+        stderrJob?.cancel()
+        stderrJob = null
         process?.destroy()
         process = null
     }

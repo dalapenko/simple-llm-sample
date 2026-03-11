@@ -22,6 +22,8 @@ class ThinkingSpinner(private val terminal: Terminal) {
     private var job: Job? = null
     private var startTime: Long = 0L
 
+    val isRunning: Boolean get() = job != null
+
     /** Start the spinner animation. Runs on [Dispatchers.IO]. */
     fun start(scope: CoroutineScope, label: String = "Thinking...") {
         startTime = System.currentTimeMillis()

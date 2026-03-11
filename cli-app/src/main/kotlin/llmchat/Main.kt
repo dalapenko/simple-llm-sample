@@ -8,7 +8,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.runBlocking
 import llmchat.agent.ConversationManager
 import llmchat.agent.ConversationStorage
-import llmchat.agent.context.*
+import llmchat.agent.context.BranchingStrategy
+import llmchat.agent.context.ContextStrategy
+import llmchat.agent.context.LayeredMemoryStrategy
+import llmchat.agent.context.SlidingWindowStrategy
+import llmchat.agent.context.StickyFactsStrategy
 import llmchat.agent.invariant.InvariantStorage
 import llmchat.agent.mcp.McpConnectionManager
 import llmchat.agent.memory.MemoryLayer
@@ -24,6 +28,7 @@ import llmchat.ui.ChatInputReader
 import llmchat.ui.CliOutput
 import llmchat.ui.ThinkingSpinner
 import java.io.File
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
@@ -73,6 +78,7 @@ suspend fun startInteractiveCli(
     val inputReader = ChatInputReader(config.strategyType)
     val spinner = ThinkingSpinner(terminal)
     val mcpManager = McpConnectionManager()
+    val pendingNotifications = ConcurrentLinkedQueue<Pair<String, String>>()
     var taskFsm: TaskFSM? = null
 
     Runtime.getRuntime().addShutdownHook(Thread {
@@ -163,6 +169,18 @@ suspend fun startInteractiveCli(
             output.printInfo("Loaded $count messages from previous session.")
         } else {
             ConversationStorage.clear()
+        }
+    }
+
+    // When any MCP server emits "[NOTIFY] title\tdescription" on stderr, show a generic banner.
+    // If the spinner is active (LLM is thinking), buffer the notification and show it
+    // immediately after the spinner stops — avoids raw-print / JLine redraw conflicts.
+    mcpManager.setNotificationHandler { title, description ->
+        val banner = output.buildMcpNotificationBanner(title, description)
+        if (spinner.isRunning) {
+            pendingNotifications.add(Pair(title, description))
+        } else {
+            inputReader.lineReader.printAbove(banner)
         }
     }
 
@@ -509,7 +527,12 @@ suspend fun startInteractiveCli(
             }
 
             is Command.Message -> {
-                val proposal = handleMessage(conversationManager, command.content, output, spinner, scope)
+                val proposal = handleMessage(conversationManager, command.content, output, spinner, scope) {
+                    while (pendingNotifications.isNotEmpty()) {
+                        val (t, d) = pendingNotifications.poll() ?: break
+                        inputReader.lineReader.printAbove(output.buildMcpNotificationBanner(t, d))
+                    }
+                }
                 val fsm = taskFsm
                 if (proposal != null && fsm != null) {
                     val requiresApproval = proposal.targetStage.requiredApproval ==
@@ -551,7 +574,8 @@ suspend fun handleMessage(
     message: String,
     output: CliOutput,
     spinner: ThinkingSpinner,
-    scope: CoroutineScope
+    scope: CoroutineScope,
+    onSpinnerStopped: () -> Unit = {}
 ): TaskTransitionProposal? {
     return try {
         spinner.start(scope)
@@ -559,6 +583,7 @@ suspend fun handleMessage(
         val result = conversationManager.sendMessage(message)
 
         spinner.stop()
+        onSpinnerStopped()
 
         result.fold(
             onSuccess = { stats ->
@@ -581,6 +606,7 @@ suspend fun handleMessage(
         )
     } catch (e: Exception) {
         spinner.stop()
+        onSpinnerStopped()
         output.printError("Unexpected error: ${e.message}")
         output.printInfo("Please try again or type /exit to quit.")
         null

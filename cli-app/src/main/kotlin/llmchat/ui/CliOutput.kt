@@ -2,7 +2,12 @@ package llmchat.ui
 
 import ai.koog.agents.core.tools.Tool
 import com.github.ajalt.mordant.markdown.Markdown
-import com.github.ajalt.mordant.rendering.TextColors.*
+import com.github.ajalt.mordant.rendering.TextColors.blue
+import com.github.ajalt.mordant.rendering.TextColors.cyan
+import com.github.ajalt.mordant.rendering.TextColors.green
+import com.github.ajalt.mordant.rendering.TextColors.magenta
+import com.github.ajalt.mordant.rendering.TextColors.red
+import com.github.ajalt.mordant.rendering.TextColors.yellow
 import com.github.ajalt.mordant.rendering.TextStyles.bold
 import com.github.ajalt.mordant.rendering.TextStyles.dim
 import com.github.ajalt.mordant.terminal.Terminal
@@ -10,9 +15,9 @@ import llmchat.agent.context.Branch
 import llmchat.agent.context.Checkpoint
 import llmchat.agent.invariant.Invariant
 import llmchat.agent.invariant.InvariantCategory
+import llmchat.agent.mcp.McpConnectionManager
 import llmchat.agent.memory.MemoryItem
 import llmchat.agent.memory.MemoryLayer
-import llmchat.agent.mcp.McpConnectionManager
 import llmchat.agent.profile.ProfileManager
 import llmchat.agent.task.TaskStage
 import llmchat.agent.task.TaskState
@@ -120,9 +125,9 @@ class CliOutput(private val terminal: Terminal) {
         terminal.println(bold("MCP (Model Context Protocol):"))
         listOf(
             "/mcp connect <cmd> [args]" to "Connect to MCP server via stdio",
-            "/mcp tools"               to "List tools from connected server",
-            "/mcp status"              to "Show MCP connection status",
-            "/mcp disconnect"          to "Disconnect from MCP server"
+            "/mcp tools" to "List tools from connected server",
+            "/mcp status" to "Show MCP connection status",
+            "/mcp disconnect" to "Disconnect from MCP server"
         ).forEach { (cmd, desc) ->
             terminal.println("  ${cyan(cmd.padEnd(30))} $desc")
         }
@@ -363,6 +368,17 @@ class CliOutput(private val terminal: Terminal) {
     }
 
     // ── MCP commands ───────────────────────────────────────────────────────────
+
+    /**
+     * Generic banner for a push notification received from any MCP server via stderr.
+     * Returns a string for [org.jline.reader.LineReader.printAbove] — no scheduler-specific text.
+     */
+    fun buildMcpNotificationBanner(title: String, description: String): String {
+        val sep = yellow("─".repeat(60))
+        val titleStr = bold(title)
+        val descPart = if (description.isNotBlank()) dim(" — $description") else ""
+        return "$sep\n ${yellow("●")} $titleStr$descPart\n$sep"
+    }
 
     fun printMcpConnected(info: McpConnectionManager.ConnectionInfo, toolCount: Int) {
         terminal.println()
