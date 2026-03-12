@@ -33,10 +33,10 @@ private data class JsonRpcRequest(
 
 class McpServer(
     input: InputStream = System.`in`,
-    output: OutputStream = System.`out`
+    output: OutputStream = System.`out`,
+    private val client: SearchClient = DuckDuckGoClient()
 ) {
     private val json = Json { ignoreUnknownKeys = true }
-    private val client = DuckDuckGoClient()
     private val reader = input.bufferedReader()
     private val writer = PrintWriter(BufferedWriter(OutputStreamWriter(output)), true)
 

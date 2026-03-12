@@ -60,7 +60,6 @@ class McpConnectionManager {
 
     // Backward-compatible accessors
     fun getRegistry(): ToolRegistry? = if (isConnected) getMergedRegistry() else null
-    fun getConnectionInfo(): ConnectionInfo? = connections.firstOrNull()?.info
 
     fun setNotificationHandler(handler: (title: String, description: String) -> Unit) {
         notificationHandler = handler

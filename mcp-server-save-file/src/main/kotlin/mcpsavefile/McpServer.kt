@@ -127,7 +127,7 @@ class McpServer(
     private fun handleToolsList(id: JsonElement): JsonElement =
         buildOk(id, buildJsonObject { put("tools", toolDefinitions) })
 
-    private suspend fun handleToolCall(id: JsonElement, params: JsonObject): JsonElement {
+    private fun handleToolCall(id: JsonElement, params: JsonObject): JsonElement {
         val name = params["name"]?.jsonPrimitive?.contentOrNull
             ?: return buildError(id, -32602, "Missing required parameter: name")
         val arguments = params["arguments"]?.jsonObject ?: JsonObject(emptyMap())

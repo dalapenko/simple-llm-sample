@@ -16,7 +16,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
-class DuckDuckGoClient {
+class DuckDuckGoClient : SearchClient {
     private val http = HttpClient(CIO) {
         install(HttpTimeout) {
             requestTimeoutMillis = 15_000
@@ -24,7 +24,7 @@ class DuckDuckGoClient {
         }
     }
 
-    suspend fun search(query: String, limit: Int = 5): JsonElement {
+    override suspend fun search(query: String, limit: Int): JsonElement {
         val responseText: String = http.get("https://api.duckduckgo.com/") {
             parameter("q", query)
             parameter("format", "json")
@@ -34,6 +34,10 @@ class DuckDuckGoClient {
         }.bodyAsText()
 
         val parsed = Json.parseToJsonElement(responseText).jsonObject
+        return parseResponse(parsed, query, limit)
+    }
+
+    internal fun parseResponse(parsed: JsonObject, query: String, limit: Int): JsonElement {
         val items = mutableListOf<JsonObject>()
 
         val answer = parsed["Answer"]?.jsonPrimitive?.contentOrNull
@@ -94,5 +98,5 @@ class DuckDuckGoClient {
         }
     }
 
-    fun close() = http.close()
+    override fun close() = http.close()
 }

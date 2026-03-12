@@ -392,7 +392,7 @@ suspend fun startInteractiveCli(
                 } else {
                     val prevStage = fsm.getState().stage
                     fsm.transition(TaskStage.DONE, "Completed").fold(
-                        onSuccess = { state ->
+                        onSuccess = {
                             output.printTaskTransition(prevStage, TaskStage.DONE)
                             TaskStateStorage.clear()
                             taskFsm = null

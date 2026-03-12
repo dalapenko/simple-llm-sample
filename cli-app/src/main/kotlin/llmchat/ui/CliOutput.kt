@@ -460,12 +460,4 @@ class CliOutput(private val terminal: Terminal) {
         print("\r\u001B[K  ${dim("✓ [MCP]")} ${dim(toolName)} ${dim("→")} ${dim(resultPreview)}\n")
         System.out.flush()
     }
-
-    // ── Legacy stubs (kept for backward compatibility during transition) ────────
-
-    /** @deprecated Use ThinkingSpinner instead */
-    fun printThinkingIndicator() {}
-
-    /** @deprecated Use ThinkingSpinner instead */
-    fun clearThinkingIndicator() {}
 }

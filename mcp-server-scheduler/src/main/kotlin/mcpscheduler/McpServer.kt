@@ -46,10 +46,11 @@ private data class JsonRpcRequest(
 
 class McpServer(
     input: InputStream = System.`in`,
-    output: OutputStream = System.`out`
+    output: OutputStream = System.`out`,
+    private val storage: ReminderStorage = ReminderStorage(),
+    private val schedulerIntervalMs: Long = System.getenv("SCHEDULER_INTERVAL_MS")?.toLongOrNull() ?: 60_000L
 ) {
     private val json = Json { ignoreUnknownKeys = true }
-    private val storage = ReminderStorage()
     private val reader = input.bufferedReader()
     private val writer = PrintWriter(BufferedWriter(OutputStreamWriter(output)), true)
 
@@ -61,13 +62,6 @@ class McpServer(
      * Prevents duplicate push notifications for one-time reminders that stay due.
      */
     private val notifiedDueIds = mutableSetOf<String>()
-
-    /**
-     * Interval between background scheduler ticks.
-     * Override via SCHEDULER_INTERVAL_MS env var (e.g. 5000 for demo).
-     */
-    private val schedulerIntervalMs: Long =
-        System.getenv("SCHEDULER_INTERVAL_MS")?.toLongOrNull() ?: 60_000L
 
     /**
      * Emit a structured push notification on stderr so the CLI can intercept it.
