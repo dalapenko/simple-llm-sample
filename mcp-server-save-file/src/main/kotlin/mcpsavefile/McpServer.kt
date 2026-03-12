@@ -102,7 +102,7 @@ class McpServer(
         }
     }
 
-    private suspend fun dispatch(request: JsonRpcRequest): JsonElement? = when (request.method) {
+    private fun dispatch(request: JsonRpcRequest): JsonElement? = when (request.method) {
         "initialize" -> handleInitialize(request.id)
         "tools/list" -> handleToolsList(request.id)
         "tools/call" -> handleToolCall(request.id, request.params?.jsonObject ?: JsonObject(emptyMap()))

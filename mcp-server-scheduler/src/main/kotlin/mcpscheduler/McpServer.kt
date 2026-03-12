@@ -462,7 +462,7 @@ class McpServer(
 
     // ── Date formatting ───────────────────────────────────────────────────────
 
-    private val displayFormatter = DateTimeFormatter.ofPattern("d MMMM yyyy HH:mm", Locale("ru"))
+    private val displayFormatter = DateTimeFormatter.ofPattern("d MMMM yyyy HH:mm", Locale.of("ru"))
 
     private fun formatEpochMs(epochMs: Long): String =
         LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMs), ZoneId.systemDefault())
@@ -474,11 +474,11 @@ class McpServer(
         DateTimeFormatter.ISO_LOCAL_DATE_TIME,                               // 2026-03-15T09:00:00
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),                  // 2026-03-15 09:00:00
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"),                     // 2026-03-15 09:00
-        DateTimeFormatter.ofPattern("d MMMM yyyy HH:mm:ss", Locale("ru")),    // 15 марта 2026 09:00:05
-        DateTimeFormatter.ofPattern("d MMMM yyyy HH:mm", Locale("ru")),      // 15 марта 2026 09:00
-        DateTimeFormatter.ofPattern("d MMMM yyyy H:mm", Locale("ru")),       // 15 марта 2026 9:00
-        DateTimeFormatter.ofPattern("d MMM yyyy HH:mm", Locale("ru")),       // 15 мар 2026 09:00
-        DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("ru")),            // 15 марта 2026  (midnight)
+        DateTimeFormatter.ofPattern("d MMMM yyyy HH:mm:ss", Locale.of("ru")),    // 15 марта 2026 09:00:05
+        DateTimeFormatter.ofPattern("d MMMM yyyy HH:mm", Locale.of("ru")),      // 15 марта 2026 09:00
+        DateTimeFormatter.ofPattern("d MMMM yyyy H:mm", Locale.of("ru")),       // 15 марта 2026 9:00
+        DateTimeFormatter.ofPattern("d MMM yyyy HH:mm", Locale.of("ru")),       // 15 мар 2026 09:00
+        DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.of("ru")),            // 15 марта 2026  (midnight)
     )
 
     private fun parseDateTime(input: String): LocalDateTime {
