@@ -13,18 +13,8 @@ repositories {
 }
 
 dependencies {
-    implementation(libs.koog.agents)
-    implementation(libs.koog.agents.mcp)
-    implementation(libs.koog.agents.features.trace)
     implementation(libs.kotlinx.serialization.json)
-
-    // TUI: colored output, animated spinner
-    implementation(libs.mordant)
-    // TUI: markdown rendering in terminal
-    implementation(libs.mordant.markdown)
-
-    // TUI: line editing, history, tab completion
-    implementation(libs.jline)
+    implementation(libs.kotlinx.coroutines.core)
 
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlinx.coroutines.test)
@@ -39,11 +29,7 @@ tasks.test {
 }
 
 application {
-    mainClass.set("llmchat.MainKt")
-}
-
-tasks.named<JavaExec>("run") {
-    standardInput = System.`in`
+    mainClass.set("mcpsavefile.MainKt")
 }
 
 tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {

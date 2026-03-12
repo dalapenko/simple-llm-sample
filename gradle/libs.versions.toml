@@ -11,6 +11,7 @@ shadow = "9.0.0-beta12"
 [libraries]
 koog-agents = { module = "ai.koog:koog-agents", version.ref = "koog" }
 koog-agents-mcp = { module = "ai.koog:agents-mcp", version.ref = "koog" }
+koog-agents-features-trace = { module = "ai.koog:agents-features-trace", version.ref = "koog" }
 
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }

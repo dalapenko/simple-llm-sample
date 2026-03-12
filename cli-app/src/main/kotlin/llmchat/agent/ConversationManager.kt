@@ -36,7 +36,8 @@ class ConversationManager(
     private var mcpConnectionInfo: McpConnectionManager.ConnectionInfo? = null
 
     fun setMcpToolRegistry(registry: ToolRegistry, connectionInfo: McpConnectionManager.ConnectionInfo) {
-        mcpToolRegistry = registry
+        // Merge: append new server's tools to existing registry
+        mcpToolRegistry += registry
         mcpConnectionInfo = connectionInfo
     }
 

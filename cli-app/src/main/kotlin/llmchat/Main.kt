@@ -2,6 +2,7 @@ package llmchat
 
 import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.tools.ToolRegistry
+import ai.koog.agents.features.tracing.feature.Tracing
 import ai.koog.prompt.executor.llms.all.simpleOpenRouterExecutor
 import com.github.ajalt.mordant.terminal.Terminal
 import kotlinx.coroutines.CoroutineScope
@@ -26,6 +27,7 @@ import llmchat.cli.Command
 import llmchat.cli.StrategyType
 import llmchat.ui.ChatInputReader
 import llmchat.ui.CliOutput
+import llmchat.ui.McpToolCallDisplayProcessor
 import llmchat.ui.ThinkingSpinner
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -101,7 +103,11 @@ suspend fun startInteractiveCli(
             llmModel = config.model.openRouterModel,
             temperature = config.temperature,
             toolRegistry = toolRegistry
-        )
+        ) {
+            install(Tracing) {
+                addMessageProcessor(McpToolCallDisplayProcessor(output))
+            }
+        }
     }
 
     val strategy: ContextStrategy = when (config.strategyType) {
@@ -476,14 +482,12 @@ suspend fun startInteractiveCli(
             is Command.McpConnect -> {
                 spinner.start(scope, label = "Connecting to MCP server...")
                 try {
-                    val registry = mcpManager.connect(command.command, command.args)
+                    val (info, registry) = mcpManager.connect(command.command, command.args)
                     spinner.stop()
-                    val info = mcpManager.getConnectionInfo()!!
                     conversationManager.setMcpToolRegistry(registry, info)
-                    output.printMcpConnected(info, registry.tools.size)
+                    output.printMcpConnected(info, registry.tools.size, mcpManager.getMergedRegistry().tools.size)
                 } catch (e: Exception) {
                     spinner.stop()
-                    mcpManager.disconnect()
                     output.printError("MCP connect failed: ${e.message}")
                     output.printInfo("Check that the command is installed and accessible.")
                 }
@@ -498,7 +502,7 @@ suspend fun startInteractiveCli(
                 }
             }
 
-            is Command.McpStatus -> output.printMcpStatus(mcpManager.getConnectionInfo())
+            is Command.McpStatus -> output.printMcpStatus(mcpManager.getConnections())
 
             is Command.McpDisconnect -> {
                 if (!mcpManager.isConnected) {

@@ -10,20 +10,13 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 /**
- * Manages a single active MCP server connection.
+ * Manages multiple active MCP server connections simultaneously.
  *
- * Lifecycle:
- *   connect()    - spawn subprocess, perform MCP handshake, build ToolRegistry
- *   disconnect() - destroy subprocess, clear state
- *   destroy()    - called from JVM shutdown hook; same as disconnect but never throws
+ * Each call to [connect] spawns a new subprocess and adds it to the pool.
+ * The merged [ToolRegistry] from all active connections is available via [getMergedRegistry].
  *
- * Security: uses ProcessBuilder(List) not Runtime.exec(String) to prevent shell injection.
+ * Security: uses ProcessBuilder(List) to prevent shell injection.
  * stderr is kept separate (redirectErrorStream=false) to avoid JSON-RPC parse errors.
- *
- * Push notifications:
- *   The server may emit "[NOTIFY] title\tdescription" lines on stderr.
- *   Register a handler via [setNotificationHandler] to receive them.
- *   The handler is called on a background IO thread.
  */
 class McpConnectionManager {
 
@@ -33,10 +26,6 @@ class McpConnectionManager {
     ) {
         val commandLine: String get() = (listOf(command) + args).joinToString(" ")
 
-        /**
-         * Returns a human-readable system-prompt hint for the LLM describing what MCP tools
-         * are available and which paths/roots the server was started with.
-         */
         fun buildPromptBlock(): String {
             val paths = args.filter { !it.startsWith("-") && !it.startsWith("@") && it.isNotBlank() }
             return buildString {
@@ -52,41 +41,39 @@ class McpConnectionManager {
         }
     }
 
-    private var process: Process? = null
-    private var registry: ToolRegistry? = null
-    private var connectionInfo: ConnectionInfo? = null
-    private var stderrJob: Job? = null
+    private data class ActiveConnection(
+        val info: ConnectionInfo,
+        val process: Process,
+        val registry: ToolRegistry,
+        val stderrJob: Job,
+    )
+
+    private val connections = mutableListOf<ActiveConnection>()
     private var notificationHandler: ((title: String, description: String) -> Unit)? = null
 
-    val isConnected: Boolean get() = process?.isAlive == true
+    val isConnected: Boolean get() = connections.any { it.process.isAlive }
 
-    fun getRegistry(): ToolRegistry? = registry
+    fun getMergedRegistry(): ToolRegistry =
+        connections.fold(ToolRegistry.EMPTY) { acc, conn -> acc + conn.registry }
 
-    fun getConnectionInfo(): ConnectionInfo? = connectionInfo
+    fun getConnections(): List<ConnectionInfo> = connections.map { it.info }
 
-    /**
-     * Register a callback to receive push notifications from the MCP server.
-     * The server emits "[NOTIFY] title\tdescription" on stderr; this handler is called
-     * for each such line on a background IO thread.
-     */
+    // Backward-compatible accessors
+    fun getRegistry(): ToolRegistry? = if (isConnected) getMergedRegistry() else null
+    fun getConnectionInfo(): ConnectionInfo? = connections.firstOrNull()?.info
+
     fun setNotificationHandler(handler: (title: String, description: String) -> Unit) {
         notificationHandler = handler
     }
 
     /**
-     * Spawns [command] with [args], performs the MCP initialize handshake via stdio,
-     * retrieves the tool list, and returns the populated [ToolRegistry].
+     * Spawns [command] with [args], performs MCP handshake, retrieves tools,
+     * and **adds** this server to the active connection pool.
      *
-     * Also starts a background coroutine reading stderr for [NOTIFY] lines.
-     *
-     * Throws on process start failure or MCP protocol error.
-     * Caller must catch and call [disconnect] on failure to clean up.
+     * Calling connect() again does NOT disconnect existing servers —
+     * all servers remain active and their tools are merged.
      */
-    suspend fun connect(command: String, args: List<String>): ToolRegistry {
-        destroyProcess()
-
-        // Resolve relative filesystem paths to absolute so MCP servers (e.g. filesystem)
-        // receive unambiguous roots, and the LLM can be told the exact allowed paths.
+    suspend fun connect(command: String, args: List<String>): Pair<ConnectionInfo, ToolRegistry> {
         val resolvedArgs = args.map { arg ->
             when {
                 arg == "." -> File(".").canonicalPath
@@ -99,10 +86,8 @@ class McpConnectionManager {
         val pb = ProcessBuilder(cmdList)
         pb.redirectErrorStream(false)
         val proc = pb.start()
-        process = proc
 
-        // Read stderr in the background — parse [NOTIFY] lines and fire the handler
-        stderrJob = CoroutineScope(Dispatchers.IO).launch {
+        val stderrJob = CoroutineScope(Dispatchers.IO).launch {
             try {
                 proc.errorStream.bufferedReader().forEachLine { line ->
                     if (line.startsWith("[NOTIFY] ")) {
@@ -112,39 +97,32 @@ class McpConnectionManager {
                         val description = if (tab >= 0) payload.substring(tab + 1) else ""
                         try {
                             notificationHandler?.invoke(title, description)
-                        } catch (_: Exception) {
-                            // Handler failed for this notification — continue reading
-                        }
+                        } catch (_: Exception) {}
                     }
                 }
-            } catch (_: Exception) {
-                // stderr stream closed (process exited)
-            }
+            } catch (_: Exception) {}
         }
 
         val transport = McpToolRegistryProvider.defaultStdioTransport(proc)
-        val reg = McpToolRegistryProvider.fromTransport(transport)
+        val registry = McpToolRegistryProvider.fromTransport(transport)
 
-        registry = reg
-        connectionInfo = ConnectionInfo(command = command, args = resolvedArgs)
-        return reg
+        val info = ConnectionInfo(command = command, args = resolvedArgs)
+        connections.add(ActiveConnection(info, proc, registry, stderrJob))
+        return Pair(info, registry)
     }
 
+    /** Disconnect all active MCP connections. */
     fun disconnect() {
-        destroyProcess()
-        registry = null
-        connectionInfo = null
+        val snapshot = connections.toList()
+        connections.clear()
+        for (conn in snapshot) {
+            conn.stderrJob.cancel()
+            conn.process.destroy()
+        }
     }
 
-    /** Called from JVM shutdown hook - must never throw. */
+    /** Called from JVM shutdown hook — must never throw. */
     fun destroy() {
-        try { destroyProcess() } catch (_: Exception) {}
-    }
-
-    private fun destroyProcess() {
-        stderrJob?.cancel()
-        stderrJob = null
-        process?.destroy()
-        process = null
+        try { disconnect() } catch (_: Exception) {}
     }
 }

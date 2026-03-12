@@ -380,12 +380,12 @@ class CliOutput(private val terminal: Terminal) {
         return "$sep\n ${yellow("●")} $titleStr$descPart\n$sep"
     }
 
-    fun printMcpConnected(info: McpConnectionManager.ConnectionInfo, toolCount: Int) {
+    fun printMcpConnected(info: McpConnectionManager.ConnectionInfo, toolCount: Int, totalTools: Int) {
         terminal.println()
         terminal.println(green(bold(" MCP Connected")))
         terminal.println(dim("─".repeat(60)))
         terminal.println("  ${dim("Server:")} ${AnsiSanitizer.strip(info.commandLine)}")
-        terminal.println("  ${dim("Tools:")}  ${green("$toolCount available")}")
+        terminal.println("  ${dim("Tools:")}  ${green("$toolCount from this server")}${if (totalTools != toolCount) dim(" ($totalTools total across all servers)") else ""}")
         terminal.println(dim("─".repeat(60)))
         terminal.println()
     }
@@ -424,16 +424,19 @@ class CliOutput(private val terminal: Terminal) {
         terminal.println()
     }
 
-    fun printMcpStatus(info: McpConnectionManager.ConnectionInfo?) {
+    fun printMcpStatus(connections: List<McpConnectionManager.ConnectionInfo>) {
         terminal.println()
         terminal.println(bold(" MCP Status"))
         terminal.println(dim("─".repeat(60)))
-        if (info == null) {
+        if (connections.isEmpty()) {
             terminal.println("  ${dim("Status:")}  ${yellow("not connected")}")
             terminal.println(dim("  Use: /mcp connect <command> [args...]"))
         } else {
-            terminal.println("  ${dim("Status:")}  ${green("connected")}")
-            terminal.println("  ${dim("Command:")} ${AnsiSanitizer.strip(info.commandLine)}")
+            terminal.println("  ${dim("Status:")}  ${green("${connections.size} server(s) connected")}")
+            connections.forEachIndexed { i, info ->
+                val connector = if (i == connections.lastIndex) "└─" else "├─"
+                terminal.println("  $connector ${AnsiSanitizer.strip(info.commandLine)}")
+            }
         }
         terminal.println(dim("─".repeat(60)))
         terminal.println()
@@ -441,6 +444,21 @@ class CliOutput(private val terminal: Terminal) {
 
     fun printMcpDisconnected() {
         terminal.println(dim("  MCP server disconnected."))
+    }
+
+    /**
+     * Prints an MCP tool call line, clearing the current spinner line first.
+     * Uses raw stdout so it works safely while the spinner animation is active.
+     */
+    fun printMcpToolCall(toolName: String, argsPreview: String) {
+        // \r\u001B[K clears the spinner line; \n pushes spinner down to a fresh line
+        print("\r\u001B[K  ${cyan("→ [MCP]")} ${bold(toolName)}${dim("($argsPreview)")}\n")
+        System.out.flush()
+    }
+
+    fun printMcpToolResult(toolName: String, resultPreview: String) {
+        print("\r\u001B[K  ${dim("✓ [MCP]")} ${dim(toolName)} ${dim("→")} ${dim(resultPreview)}\n")
+        System.out.flush()
     }
 
     // ── Legacy stubs (kept for backward compatibility during transition) ────────
