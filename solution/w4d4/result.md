@@ -41,11 +41,11 @@
 
 ## Серверы пайплайна
 
-| Сервер | Инструмент | Что делает |
-|--------|------------|------------|
-| `mcp-server-search` | `search` | Поиск по DuckDuckGo Instant Answers — возвращает структурированный JSON с результатами |
-| `mcp-server-summarize` | `summarize` | Краткий пересказ любого текста или JSON через LLM (OpenRouter) |
-| `mcp-server-save-file` | `save_to_file` | Сохраняет контент в файл в `~/.llmchat/pipeline-results/` |
+| Сервер                 | Инструмент     | Что делает                                                                             |
+|------------------------|----------------|----------------------------------------------------------------------------------------|
+| `mcp-server-search`    | `search`       | Поиск по DuckDuckGo Instant Answers — возвращает структурированный JSON с результатами |
+| `mcp-server-summarize` | `summarize`    | Краткий пересказ любого текста или JSON через LLM (OpenRouter)                         |
+| `mcp-server-save-file` | `save_to_file` | Сохраняет контент в файл в `~/.llmchat/pipeline-results/`                              |
 
 Описания инструментов содержат явные подсказки для LLM о порядке вызовов:
 - `search` → «*После вызова передай результат в `summarize`*»
@@ -163,7 +163,7 @@ val merged = connections.fold(ToolRegistry.EMPTY) { acc, conn -> acc + conn.regi
 
 ## Что произошло в демо
 
-**Сессия записана в [`mcp-pipeline.cast`](../../internal/w4d4/mcp-pipeline.cast)**
+**Сессия записана в [`demo.gif`](./demo.gif)**
 
 ```
 /mcp connect java -jar mcp-server-search/...
@@ -243,7 +243,7 @@ mcp-server-save-file/
 
 ### Переменные окружения
 
-| Переменная          | Обязательная | Описание                                      |
-|---------------------|--------------|-----------------------------------------------|
-| `OPENROUTER_API_KEY` | Да (для summarize) | API-ключ для вызовов LLM через OpenRouter |
-| `PIPELINE_MODEL`    | Нет          | Модель для суммаризации (по умолчанию: `google/gemini-2.0-flash-001`) |
+| Переменная           | Обязательная       | Описание                                                              |
+|----------------------|--------------------|-----------------------------------------------------------------------|
+| `OPENROUTER_API_KEY` | Да (для summarize) | API-ключ для вызовов LLM через OpenRouter                             |
+| `PIPELINE_MODEL`     | Нет                | Модель для суммаризации (по умолчанию: `google/gemini-2.0-flash-001`) |
