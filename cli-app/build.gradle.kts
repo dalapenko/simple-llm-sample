@@ -26,6 +26,8 @@ dependencies {
     // TUI: line editing, history, tab completion
     implementation(libs.jline)
 
+    implementation(project(":indexer"))
+
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlinx.coroutines.test)
 }

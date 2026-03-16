@@ -1,6 +1,7 @@
 package llmchat.ui
 
 import ai.koog.agents.core.tools.Tool
+import indexer.pipeline.IndexReport
 import com.github.ajalt.mordant.markdown.Markdown
 import com.github.ajalt.mordant.rendering.TextColors.blue
 import com.github.ajalt.mordant.rendering.TextColors.cyan
@@ -119,6 +120,17 @@ class CliOutput(private val terminal: Terminal) {
             "/task cancel" to "Cancel and discard task state"
         ).forEach { (cmd, desc) ->
             terminal.println("  ${cyan(cmd.padEnd(30))} $desc")
+        }
+
+        terminal.println()
+        terminal.println(bold("Knowledge base (indexer):"))
+        listOf(
+            "/index <path>" to "Index directory with structural strategy",
+            "/index <path> fixed" to "Index with fixed-size chunking (500 chars, 12% overlap)",
+            "/index <path> structural" to "Index with structural chunking (headers / declarations)",
+            "/index <path> --report" to "Index and print strategy comparison report"
+        ).forEach { (cmd, desc) ->
+            terminal.println("  ${cyan(cmd.padEnd(38))} $desc")
         }
 
         terminal.println()
@@ -459,5 +471,40 @@ class CliOutput(private val terminal: Terminal) {
     fun printMcpToolResult(toolName: String, resultPreview: String) {
         print("\r\u001B[K  ${dim("✓ [MCP]")} ${dim(toolName)} ${dim("→")} ${dim(resultPreview)}\n")
         System.out.flush()
+    }
+
+    fun printIndexReport(report: IndexReport) {
+        terminal.println()
+        terminal.println(green(bold(" Index complete")))
+        terminal.println("  Directory : ${report.directory}")
+        terminal.println("  Files     : ${report.filesProcessed}")
+        terminal.println("  Time      : ${report.processingTimeMs} ms")
+        terminal.println()
+
+        val primary = report.primaryStrategy
+        val comparison = report.comparisonStrategy
+
+        if (comparison != null) {
+            // Side-by-side comparison table
+            terminal.println(bold("  Strategy Comparison:"))
+            val header = "%-14s %10s %16s %18s".format("Strategy", "Chunks", "Avg size (chars)", "Metadata density")
+            terminal.println("  " + dim(header))
+            terminal.println("  " + dim("-".repeat(62)))
+            for (s in listOf(primary, comparison)) {
+                val row = "%-14s %10d %16.1f %17.1f%%".format(
+                    s.strategyName, s.totalChunks, s.avgChunkSize, s.metadataDensity * 100
+                )
+                terminal.println("  " + cyan(row))
+            }
+        } else {
+            terminal.println("  ${bold("Strategy:")} ${primary.strategyName}")
+            terminal.println("  ${bold("Chunks  :")} ${primary.totalChunks}")
+            terminal.println("  ${bold("Avg size:")} ${"%.1f".format(primary.avgChunkSize)} chars")
+            terminal.println("  ${bold("Metadata:")} ${"%.1f".format(primary.metadataDensity * 100)}% chunks have section info")
+        }
+
+        terminal.println()
+        terminal.println(dim("  Index stored at ~/.llmchat/knowledge-base.db"))
+        terminal.println()
     }
 }

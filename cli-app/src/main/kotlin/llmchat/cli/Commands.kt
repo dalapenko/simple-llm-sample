@@ -121,6 +121,21 @@ sealed class Command {
     /** Reload profile.md from disk without restarting. */
     data object ProfileReload : Command()
 
+    // ── Index commands ─────────────────────────────────────────────────────────
+
+    /**
+     * Index documents from a local directory into the knowledge base.
+     *
+     * @property path      Path to the directory to index.
+     * @property strategy  Chunking strategy: "fixed" (FixedSizeChunker) or "structural" (StructuralChunker).
+     * @property report    When true, also run the alternate strategy and print a side-by-side comparison.
+     */
+    data class Index(
+        val path: String,
+        val strategy: String = "structural",
+        val report: Boolean = false
+    ) : Command()
+
     // ── MCP commands ───────────────────────────────────────────────────────────
 
     /** Connect to an MCP server by launching [command] with [args] via stdio. */
@@ -348,6 +363,16 @@ sealed class Command {
                     "path" -> ProfilePath
                     "reload" -> ProfileReload
                     else -> Unknown(input)
+                }
+
+                // Index commands
+                "/index" -> {
+                    val allParts = input.split("\\s+".toRegex())
+                    val path = allParts.getOrNull(1)
+                        ?: return Unknown("/index requires a path: /index <path> [fixed|structural] [--report]")
+                    val strategy = allParts.find { it == "fixed" || it == "structural" } ?: "structural"
+                    val report = "--report" in allParts
+                    Index(path, strategy, report)
                 }
 
                 // MCP commands

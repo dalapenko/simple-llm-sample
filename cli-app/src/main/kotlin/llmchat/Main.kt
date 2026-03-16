@@ -29,6 +29,12 @@ import llmchat.ui.ChatInputReader
 import llmchat.ui.CliOutput
 import llmchat.ui.McpToolCallDisplayProcessor
 import llmchat.ui.ThinkingSpinner
+import indexer.chunker.FixedSizeChunker
+import indexer.chunker.StructuralChunker
+import indexer.document.DocumentLoader
+import indexer.embedding.OpenRouterEmbeddingClient
+import indexer.pipeline.IndexPipeline
+import indexer.store.SqliteVectorStore
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.system.exitProcess
@@ -475,6 +481,46 @@ suspend fun startInteractiveCli(
                 profileManager.reload()
                 val status = if (profileManager.getProfile() != null) "loaded" else "not active (file empty or missing)"
                 output.printInfo("Profile reloaded — $status.")
+            }
+
+            // ── MCP commands ───────────────────────────────────────────────
+
+            // ── Index commands ─────────────────────────────────────────────
+
+            is Command.Index -> {
+                val directory = File(command.path)
+                if (!directory.isDirectory) {
+                    output.printError("Not a directory: ${command.path}")
+                } else {
+                    val chunker = when (command.strategy) {
+                        "fixed" -> FixedSizeChunker()
+                        else    -> StructuralChunker()
+                    }
+                    val dbPath = System.getProperty("user.home") + "/.llmchat/knowledge-base.db"
+                    File(dbPath).parentFile.mkdirs()
+                    val store = SqliteVectorStore(dbPath)
+                    val embeddingClient = OpenRouterEmbeddingClient(apiKey)
+
+                    val pipeline = IndexPipeline(
+                        loader           = DocumentLoader(),
+                        chunker          = chunker,
+                        embeddingClient  = embeddingClient,
+                        store            = store
+                    )
+
+                    spinner.start(scope, label = "Indexing ${command.path} [${command.strategy}]...")
+                    try {
+                        val report = pipeline.run(directory, withComparison = command.report)
+                        spinner.stop()
+                        output.printIndexReport(report)
+                    } catch (e: Exception) {
+                        spinner.stop()
+                        output.printError("Indexing failed: ${e.message}")
+                    } finally {
+                        embeddingClient.close()
+                        store.close()
+                    }
+                }
             }
 
             // ── MCP commands ───────────────────────────────────────────────
