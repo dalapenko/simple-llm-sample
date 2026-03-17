@@ -155,6 +155,17 @@ class CliOutput(private val terminal: Terminal) {
         terminal.println()
     }
 
+    fun printRagInfo(sources: List<String>) {
+        if (sources.isEmpty()) {
+            terminal.println(dim("   [RAG] Контекст не найден — запрос отправлен без дополнительного контекста"))
+        } else {
+            terminal.println(dim("   [RAG] Найдено фрагментов: ${sources.size}"))
+            sources.take(5).forEach { source ->
+                terminal.println(dim("         • $source"))
+            }
+        }
+    }
+
     fun printAssistantResponse(rawResponse: String) {
         val sanitized = AnsiSanitizer.strip(rawResponse)
         terminal.println()

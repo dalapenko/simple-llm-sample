@@ -35,6 +35,7 @@ import indexer.document.DocumentLoader
 import indexer.embedding.OpenRouterEmbeddingClient
 import indexer.pipeline.IndexPipeline
 import indexer.store.SqliteVectorStore
+import llmchat.rag.RagService
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.system.exitProcess
@@ -89,9 +90,20 @@ suspend fun startInteractiveCli(
     val pendingNotifications = ConcurrentLinkedQueue<Pair<String, String>>()
     var taskFsm: TaskFSM? = null
 
+    val ragService: RagService? = if (config.ragEnabled) {
+        val svc = RagService.create(apiKey)
+        if (svc == null) {
+            output.printError("RAG mode enabled but knowledge base not found. Run /index <path> first.")
+        } else {
+            output.printInfo("RAG mode активен — знания загружены из ~/.llmchat/knowledge-base.db")
+        }
+        svc
+    } else null
+
     Runtime.getRuntime().addShutdownHook(Thread {
         inputReader.close()
         mcpManager.destroy()
+        ragService?.close()
         taskFsm?.let { fsm ->
             if (fsm.getState().stage != TaskStage.DONE) {
                 TaskStateStorage.save(fsm.getState())
@@ -577,7 +589,14 @@ suspend fun startInteractiveCli(
             }
 
             is Command.Message -> {
-                val proposal = handleMessage(conversationManager, command.content, output, spinner, scope) {
+                val messageToSend = if (ragService != null) {
+                    val ragResult = ragService.augment(command.content)
+                    output.printRagInfo(ragResult.sources)
+                    ragResult.augmentedMessage
+                } else {
+                    command.content
+                }
+                val proposal = handleMessage(conversationManager, messageToSend, output, spinner, scope) {
                     while (pendingNotifications.isNotEmpty()) {
                         val (t, d) = pendingNotifications.poll() ?: break
                         inputReader.lineReader.printAbove(output.buildMcpNotificationBanner(t, d))

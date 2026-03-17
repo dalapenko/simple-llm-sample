@@ -23,6 +23,7 @@ object CliParser {
         var strategyType = StrategyType.default
         var showHelp = false
         var profilePath: String? = null
+        var ragEnabled = false
 
         var i = 0
         while (i < args.size) {
@@ -116,6 +117,16 @@ object CliParser {
                     }
                 }
 
+                "--rag" -> {
+                    ragEnabled = true
+                    i++
+                }
+
+                "--no-rag" -> {
+                    ragEnabled = false
+                    i++
+                }
+
                 else -> {
                     throw IllegalArgumentException("Unknown argument: ${args[i]}")
                 }
@@ -129,7 +140,8 @@ object CliParser {
             ContextWindowConfig(contextWindowSize, summaryBatchSize),
             strategyType,
             showHelp,
-            profilePath
+            profilePath,
+            ragEnabled
         )
     }
 
@@ -159,6 +171,10 @@ ${SupportedModel.entries.joinToString("\n") { "                                 
               --profile PATH            Path to a profile.md file (default: ~/.llmchat/profile.md)
                                         Injected into every request as user preferences.
                                         See profiles/sample.md in the repo for an example.
+              --rag                     Enable RAG mode: retrieve relevant chunks from the
+                                        indexed knowledge base before each LLM call.
+                                        Requires: /index <path> run first.
+              --no-rag                  Disable RAG mode (default)
 
             Interactive Commands:
               /help       Show available commands

@@ -10,5 +10,6 @@ data class CliConfig(
     val contextWindow: ContextWindowConfig = ContextWindowConfig(),
     val strategyType: StrategyType = StrategyType.default,
     val showHelp: Boolean = false,
-    val profilePath: String? = null
+    val profilePath: String? = null,
+    val ragEnabled: Boolean = false
 )
