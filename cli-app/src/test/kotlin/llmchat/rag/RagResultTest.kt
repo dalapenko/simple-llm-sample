@@ -1,0 +1,82 @@
+package llmchat.rag
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+
+/**
+ * Tests for [RagResult] field defaults and [RagPipeline] contract expectations.
+ */
+class RagResultTest {
+
+    // ── defaults ──────────────────────────────────────────────────────────────
+
+    @Test
+    fun `basic constructor sets all fields`() {
+        val result = RagResult(
+            augmentedMessage = "prompt",
+            sources = listOf("File.kt"),
+            chunksFound = 3
+        )
+        assertEquals("prompt", result.augmentedMessage)
+        assertEquals(listOf("File.kt"), result.sources)
+        assertEquals(3, result.chunksFound)
+        assertNull(result.rewrittenQuery)
+        assertEquals(3, result.initialChunksFound)   // defaults to chunksFound
+        assertEquals(0, result.filteredCount)
+    }
+
+    @Test
+    fun `rewrittenQuery is null for basic RAG result`() {
+        val result = RagResult("q", emptyList(), 0)
+        assertNull(result.rewrittenQuery)
+    }
+
+    @Test
+    fun `initialChunksFound defaults to chunksFound`() {
+        val result = RagResult("q", emptyList(), 5)
+        assertEquals(5, result.initialChunksFound)
+    }
+
+    // ── advanced RAG result ───────────────────────────────────────────────────
+
+    @Test
+    fun `advanced result carries rewrittenQuery and filter stats`() {
+        val result = RagResult(
+            augmentedMessage = "ctx + question",
+            sources = listOf("A.kt", "B.kt"),
+            chunksFound = 3,
+            rewrittenQuery = "expanded search query",
+            initialChunksFound = 10,
+            filteredCount = 4
+        )
+        assertEquals("expanded search query", result.rewrittenQuery)
+        assertEquals(10, result.initialChunksFound)
+        assertEquals(4, result.filteredCount)
+        assertEquals(3, result.chunksFound)
+    }
+
+    @Test
+    fun `filteredCount plus chunksFound can be less than initialChunksFound (reranker reduced further)`() {
+        // 10 initial, 4 filtered by threshold → 6 remain, reranker picks 3 final
+        val result = RagResult(
+            augmentedMessage = "prompt",
+            sources = listOf("A.kt", "B.kt", "C.kt"),
+            chunksFound = 3,
+            initialChunksFound = 10,
+            filteredCount = 4
+        )
+        // 3 (final) + 4 (filtered) = 7, not 10 — the remaining 3 were dropped by reranker
+        assertEquals(7, result.chunksFound + result.filteredCount)
+    }
+
+    // ── empty result (no matches) ─────────────────────────────────────────────
+
+    @Test
+    fun `empty result has zero chunks and empty sources`() {
+        val result = RagResult(augmentedMessage = "original query", sources = emptyList(), chunksFound = 0)
+        assertEquals(0, result.chunksFound)
+        assertEquals(emptyList<String>(), result.sources)
+        assertEquals(0, result.filteredCount)
+    }
+}

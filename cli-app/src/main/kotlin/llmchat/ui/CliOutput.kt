@@ -1,7 +1,6 @@
 package llmchat.ui
 
 import ai.koog.agents.core.tools.Tool
-import indexer.pipeline.IndexReport
 import com.github.ajalt.mordant.markdown.Markdown
 import com.github.ajalt.mordant.rendering.TextColors.blue
 import com.github.ajalt.mordant.rendering.TextColors.cyan
@@ -12,6 +11,7 @@ import com.github.ajalt.mordant.rendering.TextColors.yellow
 import com.github.ajalt.mordant.rendering.TextStyles.bold
 import com.github.ajalt.mordant.rendering.TextStyles.dim
 import com.github.ajalt.mordant.terminal.Terminal
+import indexer.pipeline.IndexReport
 import llmchat.agent.context.Branch
 import llmchat.agent.context.Checkpoint
 import llmchat.agent.invariant.Invariant
@@ -24,6 +24,7 @@ import llmchat.agent.task.TaskStage
 import llmchat.agent.task.TaskState
 import llmchat.cli.CliConfig
 import llmchat.cli.StrategyType
+import llmchat.rag.RagResult
 
 class CliOutput(private val terminal: Terminal) {
 
@@ -155,12 +156,27 @@ class CliOutput(private val terminal: Terminal) {
         terminal.println()
     }
 
-    fun printRagInfo(sources: List<String>) {
-        if (sources.isEmpty()) {
+    fun printRagInfo(result: RagResult) {
+        val rewritten = result.rewrittenQuery
+        val isAdvanced = rewritten != null
+
+        if (isAdvanced) {
+            terminal.println(dim("   [Advanced RAG] Переписанный запрос: $rewritten"))
+            terminal.println(
+                dim(
+                    "   [Advanced RAG] Получено: ${result.initialChunksFound} фрагм." +
+                            " → отфильтровано: ${result.filteredCount}" +
+                            " → итого: ${result.chunksFound}"
+                )
+            )
+        } else {
+            terminal.println(dim("   [RAG] Найдено фрагментов: ${result.chunksFound}"))
+        }
+
+        if (result.sources.isEmpty()) {
             terminal.println(dim("   [RAG] Контекст не найден — запрос отправлен без дополнительного контекста"))
         } else {
-            terminal.println(dim("   [RAG] Найдено фрагментов: ${sources.size}"))
-            sources.take(5).forEach { source ->
+            result.sources.take(5).forEach { source ->
                 terminal.println(dim("         • $source"))
             }
         }
@@ -408,7 +424,13 @@ class CliOutput(private val terminal: Terminal) {
         terminal.println(green(bold(" MCP Connected")))
         terminal.println(dim("─".repeat(60)))
         terminal.println("  ${dim("Server:")} ${AnsiSanitizer.strip(info.commandLine)}")
-        terminal.println("  ${dim("Tools:")}  ${green("$toolCount from this server")}${if (totalTools != toolCount) dim(" ($totalTools total across all servers)") else ""}")
+        terminal.println(
+            "  ${dim("Tools:")}  ${green("$toolCount from this server")}${
+                if (totalTools != toolCount) dim(
+                    " ($totalTools total across all servers)"
+                ) else ""
+            }"
+        )
         terminal.println(dim("─".repeat(60)))
         terminal.println()
     }

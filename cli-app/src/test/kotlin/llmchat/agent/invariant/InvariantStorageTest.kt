@@ -3,10 +3,10 @@ package llmchat.agent.invariant
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import kotlin.test.assertContains
 
 class InvariantStorageTest {
 

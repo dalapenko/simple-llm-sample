@@ -28,6 +28,12 @@ dependencies {
 
     implementation(project(":indexer"))
 
+    // HTTP client for QueryRewriter and LlmJudgeReranker (Advanced RAG)
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.cio)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
+
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlinx.coroutines.test)
 }

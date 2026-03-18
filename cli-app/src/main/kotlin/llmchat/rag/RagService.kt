@@ -9,17 +9,24 @@ import java.io.File
 data class RagResult(
     val augmentedMessage: String,
     val sources: List<String>,
-    val chunksFound: Int
+    val chunksFound: Int,
+    val rewrittenQuery: String? = null,
+    val initialChunksFound: Int = chunksFound,
+    val filteredCount: Int = 0
 )
+
+interface RagPipeline : AutoCloseable {
+    suspend fun augment(query: String): RagResult
+}
 
 class RagService(
     private val searchService: SearchService,
     private val embeddingClient: OpenRouterEmbeddingClient,
     private val vectorStore: SqliteVectorStore,
     private val topK: Int = 5
-) : AutoCloseable {
+) : RagPipeline {
 
-    suspend fun augment(query: String): RagResult {
+    override suspend fun augment(query: String): RagResult {
         val entries = searchService.findSimilar(query, topK)
         if (entries.isEmpty()) {
             return RagResult(augmentedMessage = query, sources = emptyList(), chunksFound = 0)
@@ -52,7 +59,7 @@ class RagService(
     }
 }
 
-private fun buildRagPrompt(context: String, query: String): String =
+internal fun buildRagPrompt(context: String, query: String): String =
     "Используй предоставленный контекст для ответа на вопрос. " +
-    "Если в контексте нет ответа, так и скажи.\n\n" +
-    "Контекст:\n$context\n\nВопрос: $query"
+            "Если в контексте нет ответа, так и скажи.\n\n" +
+            "Контекст:\n$context\n\nВопрос: $query"

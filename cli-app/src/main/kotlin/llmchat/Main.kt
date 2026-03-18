@@ -5,6 +5,12 @@ import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.features.tracing.feature.Tracing
 import ai.koog.prompt.executor.llms.all.simpleOpenRouterExecutor
 import com.github.ajalt.mordant.terminal.Terminal
+import indexer.chunker.FixedSizeChunker
+import indexer.chunker.StructuralChunker
+import indexer.document.DocumentLoader
+import indexer.embedding.OpenRouterEmbeddingClient
+import indexer.pipeline.IndexPipeline
+import indexer.store.SqliteVectorStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.runBlocking
 import llmchat.agent.ConversationManager
@@ -24,18 +30,15 @@ import llmchat.agent.task.TaskStateStorage
 import llmchat.agent.task.TaskTransitionProposal
 import llmchat.cli.CliParser
 import llmchat.cli.Command
+import llmchat.cli.RagMode
 import llmchat.cli.StrategyType
+import llmchat.rag.AdvancedRagService
+import llmchat.rag.RagPipeline
+import llmchat.rag.RagService
 import llmchat.ui.ChatInputReader
 import llmchat.ui.CliOutput
 import llmchat.ui.McpToolCallDisplayProcessor
 import llmchat.ui.ThinkingSpinner
-import indexer.chunker.FixedSizeChunker
-import indexer.chunker.StructuralChunker
-import indexer.document.DocumentLoader
-import indexer.embedding.OpenRouterEmbeddingClient
-import indexer.pipeline.IndexPipeline
-import indexer.store.SqliteVectorStore
-import llmchat.rag.RagService
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.system.exitProcess
@@ -90,15 +93,36 @@ suspend fun startInteractiveCli(
     val pendingNotifications = ConcurrentLinkedQueue<Pair<String, String>>()
     var taskFsm: TaskFSM? = null
 
-    val ragService: RagService? = if (config.ragEnabled) {
-        val svc = RagService.create(apiKey)
-        if (svc == null) {
-            output.printError("RAG mode enabled but knowledge base not found. Run /index <path> first.")
-        } else {
-            output.printInfo("RAG mode активен — знания загружены из ~/.llmchat/knowledge-base.db")
+    val ragService: RagPipeline? = when (config.ragMode) {
+        null -> null
+        RagMode.BASIC -> {
+            val svc = RagService.create(apiKey, topK = config.ragTopK)
+            if (svc == null) {
+                output.printError("RAG mode enabled but knowledge base not found. Run /index <path> first.")
+            } else {
+                output.printInfo("RAG (базовый) активен — знания загружены из ~/.llmchat/knowledge-base.db")
+            }
+            svc
         }
-        svc
-    } else null
+
+        RagMode.ADVANCED -> {
+            val svc = AdvancedRagService.create(
+                apiKey = apiKey,
+                model = config.model.openRouterModel.id,
+                similarityThreshold = config.similarityThreshold,
+                finalTopK = config.ragTopK
+            )
+            if (svc == null) {
+                output.printError("RAG mode enabled but knowledge base not found. Run /index <path> first.")
+            } else {
+                output.printInfo(
+                    "RAG (продвинутый) активен — переписывание запросов + реранкинг" +
+                            " | порог: ${config.similarityThreshold} | top-K: ${config.ragTopK}"
+                )
+            }
+            svc
+        }
+    }
 
     Runtime.getRuntime().addShutdownHook(Thread {
         inputReader.close()
@@ -506,7 +530,7 @@ suspend fun startInteractiveCli(
                 } else {
                     val chunker = when (command.strategy) {
                         "fixed" -> FixedSizeChunker()
-                        else    -> StructuralChunker()
+                        else -> StructuralChunker()
                     }
                     val dbPath = System.getProperty("user.home") + "/.llmchat/knowledge-base.db"
                     File(dbPath).parentFile.mkdirs()
@@ -514,10 +538,10 @@ suspend fun startInteractiveCli(
                     val embeddingClient = OpenRouterEmbeddingClient(apiKey)
 
                     val pipeline = IndexPipeline(
-                        loader           = DocumentLoader(),
-                        chunker          = chunker,
-                        embeddingClient  = embeddingClient,
-                        store            = store
+                        loader = DocumentLoader(),
+                        chunker = chunker,
+                        embeddingClient = embeddingClient,
+                        store = store
                     )
 
                     spinner.start(scope, label = "Indexing ${command.path} [${command.strategy}]...")
@@ -591,7 +615,7 @@ suspend fun startInteractiveCli(
             is Command.Message -> {
                 val messageToSend = if (ragService != null) {
                     val ragResult = ragService.augment(command.content)
-                    output.printRagInfo(ragResult.sources)
+                    output.printRagInfo(ragResult)
                     ragResult.augmentedMessage
                 } else {
                     command.content

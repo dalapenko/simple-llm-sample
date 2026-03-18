@@ -1,7 +1,12 @@
 package llmchat.agent.context
 
 import llmchat.agent.TokenCounter
-import llmchat.agent.memory.*
+import llmchat.agent.memory.LongTermStore
+import llmchat.agent.memory.MemoryItem
+import llmchat.agent.memory.MemoryLayer
+import llmchat.agent.memory.MemoryStore
+import llmchat.agent.memory.ShortTermStore
+import llmchat.agent.memory.WorkMemoryStore
 
 /**
  * Three-layer memory strategy.

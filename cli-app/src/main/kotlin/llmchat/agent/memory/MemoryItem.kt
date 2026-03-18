@@ -1,7 +1,7 @@
 package llmchat.agent.memory
 
 import kotlinx.serialization.Serializable
-import java.util.UUID
+import java.util.*
 
 @Serializable
 data class MemoryItem(

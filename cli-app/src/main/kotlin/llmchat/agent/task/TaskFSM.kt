@@ -1,6 +1,6 @@
 package llmchat.agent.task
 
-import java.util.UUID
+import java.util.*
 
 /**
  * Finite State Machine for tracking long-running task lifecycles.
@@ -27,12 +27,12 @@ class TaskFSM(
 ) {
 
     private val validTransitions: Map<TaskStage, Set<TaskStage>> = mapOf(
-        TaskStage.PLANNING      to setOf(TaskStage.PLAN_APPROVED, TaskStage.ERROR),
+        TaskStage.PLANNING to setOf(TaskStage.PLAN_APPROVED, TaskStage.ERROR),
         TaskStage.PLAN_APPROVED to setOf(TaskStage.EXECUTION, TaskStage.PLANNING, TaskStage.ERROR),
-        TaskStage.EXECUTION     to setOf(TaskStage.VALIDATION, TaskStage.PLANNING, TaskStage.ERROR),
-        TaskStage.VALIDATION    to setOf(TaskStage.DONE, TaskStage.PLANNING, TaskStage.EXECUTION, TaskStage.ERROR),
-        TaskStage.DONE          to emptySet(),
-        TaskStage.ERROR         to setOf(TaskStage.PLANNING)
+        TaskStage.EXECUTION to setOf(TaskStage.VALIDATION, TaskStage.PLANNING, TaskStage.ERROR),
+        TaskStage.VALIDATION to setOf(TaskStage.DONE, TaskStage.PLANNING, TaskStage.EXECUTION, TaskStage.ERROR),
+        TaskStage.DONE to emptySet(),
+        TaskStage.ERROR to setOf(TaskStage.PLANNING)
     )
 
     fun getState(): TaskState = state
@@ -47,7 +47,7 @@ class TaskFSM(
             return Result.failure(
                 IllegalStateException(
                     "Invalid transition: ${state.stage} → $newStage. " +
-                    "Allowed from ${state.stage}: ${allowed.joinToString { it.name }}"
+                            "Allowed from ${state.stage}: ${allowed.joinToString { it.name }}"
                 )
             )
         }

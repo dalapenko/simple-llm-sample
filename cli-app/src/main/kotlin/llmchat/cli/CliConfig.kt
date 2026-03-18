@@ -11,5 +11,9 @@ data class CliConfig(
     val strategyType: StrategyType = StrategyType.default,
     val showHelp: Boolean = false,
     val profilePath: String? = null,
-    val ragEnabled: Boolean = false
-)
+    val ragMode: RagMode? = null,
+    val similarityThreshold: Double = 0.65,
+    val ragTopK: Int = 5
+) {
+    val ragEnabled: Boolean get() = ragMode != null
+}

@@ -96,10 +96,12 @@ class McpConnectionManager {
                         val description = if (tab >= 0) payload.substring(tab + 1) else ""
                         try {
                             notificationHandler?.invoke(title, description)
-                        } catch (_: Exception) {}
+                        } catch (_: Exception) {
+                        }
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
         }
 
         val transport = McpToolRegistryProvider.defaultStdioTransport(proc)
@@ -122,6 +124,9 @@ class McpConnectionManager {
 
     /** Called from JVM shutdown hook — must never throw. */
     fun destroy() {
-        try { disconnect() } catch (_: Exception) {}
+        try {
+            disconnect()
+        } catch (_: Exception) {
+        }
     }
 }

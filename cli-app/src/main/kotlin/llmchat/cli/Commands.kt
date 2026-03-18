@@ -314,10 +314,10 @@ sealed class Command {
                     }
 
                     "auto" -> when (parts.getOrNull(2)?.lowercase()) {
-                        "on"  -> TaskAuto(true)
+                        "on" -> TaskAuto(true)
                         "off" -> TaskAuto(false)
-                        null  -> TaskAuto(null)
-                        else  -> Unknown("/task auto requires 'on' or 'off'")
+                        null -> TaskAuto(null)
+                        else -> Unknown("/task auto requires 'on' or 'off'")
                     }
 
                     else -> Unknown(input)
@@ -384,6 +384,7 @@ sealed class Command {
                         val mcpArgs = allParts.drop(3)
                         McpConnect(mcpCommand, mcpArgs)
                     }
+
                     "tools" -> McpTools
                     "disconnect" -> McpDisconnect
                     null, "status" -> McpStatus

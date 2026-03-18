@@ -23,7 +23,9 @@ object CliParser {
         var strategyType = StrategyType.default
         var showHelp = false
         var profilePath: String? = null
-        var ragEnabled = false
+        var ragMode: RagMode? = null
+        var similarityThreshold = 0.65
+        var ragTopK = 5
 
         var i = 0
         while (i < args.size) {
@@ -118,13 +120,50 @@ object CliParser {
                 }
 
                 "--rag" -> {
-                    ragEnabled = true
+                    if (ragMode == null) ragMode = RagMode.BASIC
                     i++
                 }
 
                 "--no-rag" -> {
-                    ragEnabled = false
+                    ragMode = null
                     i++
+                }
+
+                "--mode" -> {
+                    if (i + 1 < args.size) {
+                        val name = args[i + 1]
+                        ragMode = RagMode.fromCliName(name)
+                            ?: throw IllegalArgumentException(
+                                "--mode must be one of: ${RagMode.availableNames.joinToString(", ")}"
+                            )
+                        i += 2
+                    } else {
+                        throw IllegalArgumentException("--mode requires an argument")
+                    }
+                }
+
+                "--threshold" -> {
+                    if (i + 1 < args.size) {
+                        val v = args[i + 1].toDoubleOrNull()
+                            ?: throw IllegalArgumentException("--threshold must be a number between 0.0 and 1.0")
+                        if (v !in 0.0..1.0) throw IllegalArgumentException("--threshold must be between 0.0 and 1.0")
+                        similarityThreshold = v
+                        i += 2
+                    } else {
+                        throw IllegalArgumentException("--threshold requires an argument")
+                    }
+                }
+
+                "--top-k" -> {
+                    if (i + 1 < args.size) {
+                        val n = args[i + 1].toIntOrNull()
+                            ?: throw IllegalArgumentException("--top-k must be a positive integer")
+                        if (n < 1) throw IllegalArgumentException("--top-k must be >= 1")
+                        ragTopK = n
+                        i += 2
+                    } else {
+                        throw IllegalArgumentException("--top-k requires an argument")
+                    }
                 }
 
                 else -> {
@@ -141,7 +180,9 @@ object CliParser {
             strategyType,
             showHelp,
             profilePath,
-            ragEnabled
+            ragMode,
+            similarityThreshold,
+            ragTopK
         )
     }
 
@@ -171,10 +212,15 @@ ${SupportedModel.entries.joinToString("\n") { "                                 
               --profile PATH            Path to a profile.md file (default: ~/.llmchat/profile.md)
                                         Injected into every request as user preferences.
                                         See profiles/sample.md in the repo for an example.
-              --rag                     Enable RAG mode: retrieve relevant chunks from the
-                                        indexed knowledge base before each LLM call.
+              --mode MODE               RAG mode: basic (retrieve→generate) or
+                                        advanced (rewrite→filter→rerank→generate).
                                         Requires: /index <path> run first.
-              --no-rag                  Disable RAG mode (default)
+                                        Available: ${RagMode.availableNames.joinToString(", ")}
+              --rag                     Shorthand for --mode basic
+              --no-rag                  Disable RAG (default)
+              --threshold VALUE         Similarity threshold for advanced mode (0.0–1.0, default: 0.65)
+                                        Chunks below this score are filtered before reranking.
+              --top-k N                 Final number of chunks sent to LLM (default: 5 basic / 3 advanced)
 
             Interactive Commands:
               /help       Show available commands
