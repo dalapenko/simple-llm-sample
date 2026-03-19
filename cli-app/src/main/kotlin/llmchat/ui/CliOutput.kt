@@ -162,24 +162,41 @@ class CliOutput(private val terminal: Terminal) {
 
         if (isAdvanced) {
             terminal.println(dim("   [Advanced RAG] Переписанный запрос: $rewritten"))
+            val scoreLabel = if (result.topScore > 0f) " | лучший балл: ${"%.3f".format(result.topScore)}" else ""
             terminal.println(
                 dim(
                     "   [Advanced RAG] Получено: ${result.initialChunksFound} фрагм." +
                             " → отфильтровано: ${result.filteredCount}" +
-                            " → итого: ${result.chunksFound}"
+                            " → итого: ${result.chunksFound}" +
+                            scoreLabel
                 )
             )
         } else {
             terminal.println(dim("   [RAG] Найдено фрагментов: ${result.chunksFound}"))
         }
 
+        if (result.lowRelevance) {
+            terminal.println(yellow("   ⚠ Низкая релевантность — активирован режим «Я не знаю»"))
+            return
+        }
+
         if (result.sources.isEmpty()) {
             terminal.println(dim("   [RAG] Контекст не найден — запрос отправлен без дополнительного контекста"))
         } else {
-            result.sources.take(5).forEach { source ->
-                terminal.println(dim("         • $source"))
-            }
+            result.sources.zip(result.chunkIds.ifEmpty { List(result.sources.size) { "" } })
+                .take(5)
+                .forEach { (source, chunkId) ->
+                    val idLabel = if (chunkId.isNotEmpty()) dim(" [ID: $chunkId]") else ""
+                    terminal.println(dim("         • $source") + idLabel)
+                }
         }
+    }
+
+    fun printLowRelevanceResponse(message: String) {
+        terminal.println()
+        terminal.println(yellow(bold(" Ассистент")))
+        terminal.println(yellow(message))
+        terminal.println()
     }
 
     fun printAssistantResponse(rawResponse: String) {

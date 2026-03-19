@@ -86,4 +86,74 @@ class ContextAssemblerTest {
     fun `summarizeSources empty list returns empty`() {
         assertEquals(emptyList(), ContextAssembler.summarizeSources(emptyList()))
     }
+
+    // ── assembleWithIds ───────────────────────────────────────────────────────
+
+    @Test
+    fun `assembleWithIds empty list returns empty string`() {
+        assertEquals("", ContextAssembler.assembleWithIds(emptyList()))
+    }
+
+    @Test
+    fun `assembleWithIds prefixes each block with short chunk ID`() {
+        val e = entry("/project/Foo.kt", null, "body")
+        val result = ContextAssembler.assembleWithIds(listOf(e))
+        val shortId = e.chunk.metadata.chunkId.take(8)
+        assertTrue("[ID: $shortId]" in result, "Expected [ID: $shortId] in output")
+    }
+
+    @Test
+    fun `assembleWithIds short ID is exactly 8 chars`() {
+        val e = entry("/project/Foo.kt", null, "body")
+        val result = ContextAssembler.assembleWithIds(listOf(e))
+        val idMatch = Regex("""\[ID: ([0-9a-f-]{8})\]""").find(result)
+        assertEquals(8, idMatch?.groupValues?.get(1)?.length)
+    }
+
+    @Test
+    fun `assembleWithIds still includes filename and content`() {
+        val result = ContextAssembler.assembleWithIds(listOf(
+            entry("/project/Bar.kt", "myFun", "fun myFun() = 1")
+        ))
+        assertTrue("Bar.kt" in result)
+        assertTrue("myFun" in result)
+        assertTrue("fun myFun() = 1" in result)
+    }
+
+    @Test
+    fun `assembleWithIds multiple entries are separated by divider`() {
+        val result = ContextAssembler.assembleWithIds(listOf(
+            entry("/a/First.kt", null, "first"),
+            entry("/b/Second.kt", null, "second")
+        ))
+        assertTrue("---" in result)
+        val idMatches = Regex("""\[ID: [0-9a-f-]{8}\]""").findAll(result).count()
+        assertEquals(2, idMatches)
+    }
+
+    // ── extractChunkIds ───────────────────────────────────────────────────────
+
+    @Test
+    fun `extractChunkIds empty list returns empty`() {
+        assertEquals(emptyList(), ContextAssembler.extractChunkIds(emptyList()))
+    }
+
+    @Test
+    fun `extractChunkIds returns short IDs in entry order`() {
+        val e1 = entry("/a/A.kt", null, "a")
+        val e2 = entry("/b/B.kt", null, "b")
+        val ids = ContextAssembler.extractChunkIds(listOf(e1, e2))
+        assertEquals(2, ids.size)
+        assertEquals(e1.chunk.metadata.chunkId.take(8), ids[0])
+        assertEquals(e2.chunk.metadata.chunkId.take(8), ids[1])
+    }
+
+    @Test
+    fun `extractChunkIds each ID is 8 chars`() {
+        val ids = ContextAssembler.extractChunkIds(listOf(
+            entry("/a/A.kt", null, "body"),
+            entry("/b/B.kt", null, "body")
+        ))
+        ids.forEach { assertEquals(8, it.length) }
+    }
 }

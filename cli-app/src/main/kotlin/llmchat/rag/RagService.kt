@@ -12,7 +12,13 @@ data class RagResult(
     val chunksFound: Int,
     val rewrittenQuery: String? = null,
     val initialChunksFound: Int = chunksFound,
-    val filteredCount: Int = 0
+    val filteredCount: Int = 0,
+    /** True when the top-ranked chunk score is below the relevance threshold — triggers "I don't know" mode. */
+    val lowRelevance: Boolean = false,
+    /** Cosine similarity score of the best reranked chunk (0.0–1.0). */
+    val topScore: Float = 0f,
+    /** Short chunk IDs (first 8 chars of UUID) for each source chunk, in order. */
+    val chunkIds: List<String> = emptyList()
 )
 
 interface RagPipeline : AutoCloseable {
@@ -59,7 +65,19 @@ class RagService(
     }
 }
 
-internal fun buildRagPrompt(context: String, query: String): String =
-    "Используй предоставленный контекст для ответа на вопрос. " +
-            "Если в контексте нет ответа, так и скажи.\n\n" +
-            "Контекст:\n$context\n\nВопрос: $query"
+internal fun buildRagPrompt(context: String, query: String): String = buildString {
+    appendLine("Ты — точный ассистент, который отвечает СТРОГО на основе предоставленного контекста.")
+    appendLine()
+    appendLine("ПРАВИЛА:")
+    appendLine("1. Используй ТОЛЬКО информацию из раздела «Контекст» ниже. Не добавляй знания из других источников.")
+    appendLine("2. Для каждого утверждения ссылайся на ID фрагмента (указан как «[ID: ...]» в начале каждого блока).")
+    appendLine("3. В конце ответа обязательно добавь два раздела:")
+    appendLine("   ## Источники — список использованных файлов и ID фрагментов в формате: [ID: <id>] <filename> (<section>)")
+    appendLine("   ## Цитаты — дословные (verbatim) цитаты из контекста, поддерживающие ответ")
+    appendLine("4. Если ответ не содержится в контексте — напиши об этом явно.")
+    appendLine()
+    appendLine("Контекст:")
+    appendLine(context)
+    appendLine()
+    append("Вопрос: $query")
+}

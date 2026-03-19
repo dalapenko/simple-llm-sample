@@ -613,13 +613,19 @@ suspend fun startInteractiveCli(
             }
 
             is Command.Message -> {
+                var lowRelevanceTriggered = false
                 val messageToSend = if (ragService != null) {
                     val ragResult = ragService.augment(command.content)
                     output.printRagInfo(ragResult)
+                    if (ragResult.lowRelevance) {
+                        output.printLowRelevanceResponse(ragResult.augmentedMessage)
+                        lowRelevanceTriggered = true
+                    }
                     ragResult.augmentedMessage
                 } else {
                     command.content
                 }
+                if (lowRelevanceTriggered) continue
                 val proposal = handleMessage(conversationManager, messageToSend, output, spinner, scope) {
                     while (pendingNotifications.isNotEmpty()) {
                         val (t, d) = pendingNotifications.poll() ?: break

@@ -27,6 +27,20 @@ import java.io.File
  *          → ContextAssemble → buildRagPrompt → LLM Answer
  * ```
  */
+/**
+ * Minimum cosine similarity score of the top reranked chunk below which the pipeline
+ * refuses to answer and triggers the "I don't know" anti-hallucination guardrail.
+ */
+/**
+ * Calibrated for text-embedding-3-small on this KB: relevant code/docs score ~0.35–0.50,
+ * fully off-topic queries score ~0.25–0.33.  Use 0.35 as the cutoff.
+ */
+private const val RELEVANCE_THRESHOLD = 0.35f
+
+private const val LOW_RELEVANCE_MESSAGE =
+    "Я не знаю ответа на этот вопрос на основе имеющихся документов. " +
+            "Пожалуйста, уточните запрос или добавьте новые данные в базу знаний."
+
 class AdvancedRagService(
     private val embeddingClient: OpenRouterEmbeddingClient,
     private val vectorStore: SqliteVectorStore,
@@ -41,18 +55,33 @@ class AdvancedRagService(
         // Stage 1: Rewrite the query using LLM
         val rewrittenQuery = queryRewriter.rewrite(query)
 
-        // Stage 2: Embed the rewritten query and retrieve a wider candidate set
-        val queryEmbedding = embeddingClient.embed(rewrittenQuery)
-        val rawEntries = vectorStore.search(queryEmbedding, initialTopK)
-
-        if (rawEntries.isEmpty()) {
+        // Stage 2: Embed the rewritten query — gracefully degrade on API errors
+        val queryEmbedding = try {
+            embeddingClient.embed(rewrittenQuery)
+        } catch (e: Exception) {
             return RagResult(
-                augmentedMessage = query,
+                augmentedMessage = LOW_RELEVANCE_MESSAGE,
                 sources = emptyList(),
                 chunksFound = 0,
                 rewrittenQuery = rewrittenQuery,
                 initialChunksFound = 0,
-                filteredCount = 0
+                filteredCount = 0,
+                lowRelevance = true,
+                topScore = 0f
+            )
+        }
+        val rawEntries = vectorStore.search(queryEmbedding, initialTopK)
+
+        if (rawEntries.isEmpty()) {
+            return RagResult(
+                augmentedMessage = LOW_RELEVANCE_MESSAGE,
+                sources = emptyList(),
+                chunksFound = 0,
+                rewrittenQuery = rewrittenQuery,
+                initialChunksFound = 0,
+                filteredCount = 0,
+                lowRelevance = true,
+                topScore = 0f
             )
         }
 
@@ -69,10 +98,26 @@ class AdvancedRagService(
         // Stage 4: LLM-as-judge selects the final top-K
         val reranked = reranker.rerank(query, candidates, finalTopK)
 
-        // Stage 5: Assemble context from the final reranked entries
+        // Stage 5: Anti-hallucination guardrail — check top reranked score
+        val topScore = reranked.firstOrNull()?.score ?: 0f
+        if (topScore < RELEVANCE_THRESHOLD) {
+            return RagResult(
+                augmentedMessage = LOW_RELEVANCE_MESSAGE,
+                sources = emptyList(),
+                chunksFound = 0,
+                rewrittenQuery = rewrittenQuery,
+                initialChunksFound = rawEntries.size,
+                filteredCount = filteredCount,
+                lowRelevance = true,
+                topScore = topScore
+            )
+        }
+
+        // Stage 6: Assemble context with chunk IDs for citation support
         val finalEntries = reranked.map { it.entry }
-        val context = ContextAssembler.assemble(finalEntries)
+        val context = ContextAssembler.assembleWithIds(finalEntries)
         val sources = ContextAssembler.summarizeSources(finalEntries)
+        val chunkIds = ContextAssembler.extractChunkIds(finalEntries)
         val augmented = buildRagPrompt(context, query)
 
         return RagResult(
@@ -81,7 +126,10 @@ class AdvancedRagService(
             chunksFound = finalEntries.size,
             rewrittenQuery = rewrittenQuery,
             initialChunksFound = rawEntries.size,
-            filteredCount = filteredCount
+            filteredCount = filteredCount,
+            lowRelevance = false,
+            topScore = topScore,
+            chunkIds = chunkIds
         )
     }
 
