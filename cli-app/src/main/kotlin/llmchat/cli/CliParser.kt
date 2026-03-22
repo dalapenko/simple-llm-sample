@@ -212,8 +212,10 @@ ${SupportedModel.entries.joinToString("\n") { "                                 
               --profile PATH            Path to a profile.md file (default: ~/.llmchat/profile.md)
                                         Injected into every request as user preferences.
                                         See profiles/sample.md in the repo for an example.
-              --mode MODE               RAG mode: basic (retrieve→generate) or
-                                        advanced (rewrite→filter→rerank→generate).
+              --mode MODE               RAG mode: basic, advanced, or conversational.
+                                        basic: retrieve→generate
+                                        advanced: rewrite→filter→rerank→generate
+                                        conversational: history-aware + task state + advanced
                                         Requires: /index <path> run first.
                                         Available: ${RagMode.availableNames.joinToString(", ")}
               --rag                     Shorthand for --mode basic

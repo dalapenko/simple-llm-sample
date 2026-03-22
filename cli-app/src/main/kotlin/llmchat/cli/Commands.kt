@@ -121,6 +121,14 @@ sealed class Command {
     /** Reload profile.md from disk without restarting. */
     data object ProfileReload : Command()
 
+    // ── Conversational RAG commands ────────────────────────────────────────────
+
+    /** Clear conversational RAG history and task state (conversational mode only). */
+    data object RagReset : Command()
+
+    /** Display the current Task State (goal, constraints, terms, knowledge). */
+    data object RagState : Command()
+
     // ── Index commands ─────────────────────────────────────────────────────────
 
     /**
@@ -364,6 +372,10 @@ sealed class Command {
                     "reload" -> ProfileReload
                     else -> Unknown(input)
                 }
+
+                // Conversational RAG commands
+                "/reset" -> RagReset
+                "/state" -> RagState
 
                 // Index commands
                 "/index" -> {

@@ -33,6 +33,7 @@ import llmchat.cli.Command
 import llmchat.cli.RagMode
 import llmchat.cli.StrategyType
 import llmchat.rag.AdvancedRagService
+import llmchat.rag.ConversationalRagService
 import llmchat.rag.RagPipeline
 import llmchat.rag.RagService
 import llmchat.ui.ChatInputReader
@@ -118,6 +119,25 @@ suspend fun startInteractiveCli(
                 output.printInfo(
                     "RAG (продвинутый) активен — переписывание запросов + реранкинг" +
                             " | порог: ${config.similarityThreshold} | top-K: ${config.ragTopK}"
+                )
+            }
+            svc
+        }
+
+        RagMode.CONVERSATIONAL -> {
+            val svc = ConversationalRagService.create(
+                apiKey = apiKey,
+                model = config.model.openRouterModel.id,
+                similarityThreshold = config.similarityThreshold,
+                finalTopK = config.ragTopK
+            )
+            if (svc == null) {
+                output.printError("RAG mode enabled but knowledge base not found. Run /index <path> first.")
+            } else {
+                output.printInfo(
+                    "RAG (диалоговый) активен — история + состояние задачи + реранкинг" +
+                            " | порог: ${config.similarityThreshold} | top-K: ${config.ragTopK}" +
+                            " | /state — просмотр состояния | /reset — сброс памяти"
                 )
             }
             svc
@@ -596,6 +616,27 @@ suspend fun startInteractiveCli(
                 }
             }
 
+            is Command.RagReset -> {
+                val convSvc = ragService as? ConversationalRagService
+                if (convSvc == null) {
+                    output.printError("/reset is only available in --mode conversational")
+                } else {
+                    convSvc.reset()
+                    conversationManager.clearHistory()
+                    conversationManager.setRagTaskStateBlock("")
+                    output.printInfo("Диалоговая память и состояние задачи сброшены.")
+                }
+            }
+
+            is Command.RagState -> {
+                val convSvc = ragService as? ConversationalRagService
+                if (convSvc == null) {
+                    output.printError("/state is only available in --mode conversational")
+                } else {
+                    terminal.println(convSvc.taskStateManager.toDisplayString())
+                }
+            }
+
             is Command.Unknown -> {
                 output.printError("Unknown command: ${command.input}")
                 output.printInfo("Type /help for available commands.")
@@ -626,12 +667,20 @@ suspend fun startInteractiveCli(
                     command.content
                 }
                 if (lowRelevanceTriggered) continue
-                val proposal = handleMessage(conversationManager, messageToSend, output, spinner, scope) {
+                val stats = handleMessage(conversationManager, messageToSend, output, spinner, scope) {
                     while (pendingNotifications.isNotEmpty()) {
                         val (t, d) = pendingNotifications.poll() ?: break
                         inputReader.lineReader.printAbove(output.buildMcpNotificationBanner(t, d))
                     }
                 }
+                // Update conversational RAG history and task state after each successful turn
+                val convSvc = ragService as? ConversationalRagService
+                if (stats != null && convSvc != null) {
+                    convSvc.addToHistory(command.content, stats.response)
+                    convSvc.taskStateManager.updateFromTurn(command.content, stats.response)
+                    conversationManager.setRagTaskStateBlock(convSvc.taskStateManager.toSystemPromptBlock())
+                }
+                val proposal = stats?.transitionProposal
                 val fsm = taskFsm
                 if (proposal != null && fsm != null) {
                     val requiresApproval = proposal.targetStage.requiredApproval ==
@@ -675,7 +724,7 @@ suspend fun handleMessage(
     spinner: ThinkingSpinner,
     scope: CoroutineScope,
     onSpinnerStopped: () -> Unit = {}
-): TaskTransitionProposal? {
+): llmchat.agent.RequestStatistics? {
     return try {
         spinner.start(scope)
 
@@ -695,7 +744,7 @@ suspend fun handleMessage(
                     totalTokens = stats.totalTokens,
                     longTermTokens = stats.longTermTokens
                 )
-                stats.transitionProposal
+                stats
             },
             onFailure = { error ->
                 output.printError("Error communicating with LLM: ${error.message}")

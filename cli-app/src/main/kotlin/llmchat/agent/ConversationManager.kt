@@ -34,6 +34,8 @@ class ConversationManager(
     private var autoMode: Boolean = false
     private var mcpToolRegistry: ToolRegistry = ToolRegistry.EMPTY
     private var mcpConnectionInfo: McpConnectionManager.ConnectionInfo? = null
+    /** Task state block injected by ConversationalRagService after each turn. */
+    private var ragTaskStateBlock: String = ""
 
     fun setMcpToolRegistry(registry: ToolRegistry, connectionInfo: McpConnectionManager.ConnectionInfo) {
         // Merge: append new server's tools to existing registry
@@ -138,11 +140,23 @@ class ConversationManager(
                 append("\n\n")
                 append(mcpBlock)
             }
+            if (ragTaskStateBlock.isNotEmpty()) {
+                append("\n\n")
+                append(ragTaskStateBlock)
+            }
         }
     }
 
     fun setBaseSystemPrompt(prompt: String) {
         baseSystemPrompt = prompt
+    }
+
+    /**
+     * Injects the task state block produced by [ConversationalRagService] into
+     * the system prompt for the next turn. Called after each LLM response.
+     */
+    fun setRagTaskStateBlock(block: String) {
+        ragTaskStateBlock = block
     }
 
     fun clearHistory() {
