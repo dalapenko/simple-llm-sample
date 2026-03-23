@@ -13,7 +13,10 @@ data class CliConfig(
     val profilePath: String? = null,
     val ragMode: RagMode? = null,
     val similarityThreshold: Double = 0.65,
-    val ragTopK: Int = 5
+    val ragTopK: Int = 5,
+    val provider: LlmProvider = LlmProvider.default,
+    val localModelName: String = "llama3.2",
+    val localUrl: String = "http://localhost:11434"
 ) {
     val ragEnabled: Boolean get() = ragMode != null
 }

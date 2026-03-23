@@ -26,6 +26,9 @@ object CliParser {
         var ragMode: RagMode? = null
         var similarityThreshold = 0.65
         var ragTopK = 5
+        var provider = LlmProvider.default
+        var localModelName = "llama3.2"
+        var localUrl = "http://localhost:11434"
 
         var i = 0
         while (i < args.size) {
@@ -166,6 +169,37 @@ object CliParser {
                     }
                 }
 
+                "--provider" -> {
+                    if (i + 1 < args.size) {
+                        val name = args[i + 1]
+                        provider = LlmProvider.fromCliName(name)
+                            ?: throw IllegalArgumentException(
+                                "--provider must be one of: ${LlmProvider.availableNames.joinToString(", ")}"
+                            )
+                        i += 2
+                    } else {
+                        throw IllegalArgumentException("--provider requires an argument")
+                    }
+                }
+
+                "--local-model" -> {
+                    if (i + 1 < args.size) {
+                        localModelName = args[i + 1]
+                        i += 2
+                    } else {
+                        throw IllegalArgumentException("--local-model requires an argument")
+                    }
+                }
+
+                "--local-url" -> {
+                    if (i + 1 < args.size) {
+                        localUrl = args[i + 1]
+                        i += 2
+                    } else {
+                        throw IllegalArgumentException("--local-url requires an argument")
+                    }
+                }
+
                 else -> {
                     throw IllegalArgumentException("Unknown argument: ${args[i]}")
                 }
@@ -182,7 +216,10 @@ object CliParser {
             profilePath,
             ragMode,
             similarityThreshold,
-            ragTopK
+            ragTopK,
+            provider,
+            localModelName,
+            localUrl
         )
     }
 
@@ -223,6 +260,11 @@ ${SupportedModel.entries.joinToString("\n") { "                                 
               --threshold VALUE         Similarity threshold for advanced mode (0.0–1.0, default: 0.65)
                                         Chunks below this score are filtered before reranking.
               --top-k N                 Final number of chunks sent to LLM (default: 5 basic / 3 advanced)
+              --provider PROVIDER       LLM provider (default: ${LlmProvider.default.cliName})
+                                        Available: ${LlmProvider.availableNames.joinToString(", ")}
+              --local-model NAME        Model name for Ollama (default: llama3.2)
+                                        Examples: llama3.2, mistral, qwen2.5:7b, phi4
+              --local-url URL           Ollama server URL (default: http://localhost:11434)
 
             Interactive Commands:
               /help       Show available commands
@@ -239,8 +281,13 @@ ${SupportedModel.entries.joinToString("\n") { "                                 
               ./gradlew run --args="--model mistral-7b --temperature 0.5"
               ./gradlew run --args="--profile profiles/sample.md"
             
+            Examples (Ollama / local):
+              ./gradlew run --args="--provider ollama"
+              ./gradlew run --args="--provider ollama --local-model mistral"
+              ./gradlew run --args="--provider ollama --local-model qwen2.5:7b --local-url http://192.168.1.10:11434"
+
             Environment Variables:
-              OPENROUTER_API_KEY    Required: Your OpenRouter API key
+              OPENROUTER_API_KEY    Required for --provider openrouter (default). Not needed for local providers.
             """.trimIndent()
         )
     }

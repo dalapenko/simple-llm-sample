@@ -185,15 +185,18 @@ class TaskStateManager(
                     val v = line.removePrefix("GOAL:").trim()
                     if (v.isNotEmpty() && v.uppercase() != "UNCHANGED") goal = v
                 }
+
                 line.startsWith("CONSTRAINT:") -> {
                     val v = line.removePrefix("CONSTRAINT:").trim()
                     if (v.isNotEmpty()) constraints.add(v)
                 }
+
                 line.startsWith("TERM:") -> {
                     val v = line.removePrefix("TERM:").trim()
                     val parts = v.split("=", limit = 2)
                     if (parts.size == 2) clarifiedTerms[parts[0].trim()] = parts[1].trim()
                 }
+
                 line.startsWith("KNOWLEDGE:") -> {
                     val v = line.removePrefix("KNOWLEDGE:").trim()
                     if (v.isNotEmpty()) updatedKnowledge.add(v)

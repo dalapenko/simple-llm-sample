@@ -3,7 +3,11 @@ package llmchat
 import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.features.tracing.feature.Tracing
+import ai.koog.prompt.executor.llms.all.simpleOllamaAIExecutor
 import ai.koog.prompt.executor.llms.all.simpleOpenRouterExecutor
+import ai.koog.prompt.llm.LLMCapability
+import ai.koog.prompt.llm.LLMProvider
+import ai.koog.prompt.llm.LLModel
 import com.github.ajalt.mordant.terminal.Terminal
 import indexer.chunker.FixedSizeChunker
 import indexer.chunker.StructuralChunker
@@ -27,9 +31,9 @@ import llmchat.agent.profile.ProfileManager
 import llmchat.agent.task.TaskFSM
 import llmchat.agent.task.TaskStage
 import llmchat.agent.task.TaskStateStorage
-import llmchat.agent.task.TaskTransitionProposal
 import llmchat.cli.CliParser
 import llmchat.cli.Command
+import llmchat.cli.LlmProvider
 import llmchat.cli.RagMode
 import llmchat.cli.StrategyType
 import llmchat.rag.AdvancedRagService
@@ -64,10 +68,11 @@ fun main(args: Array<String>) {
         }
 
         val apiKey = System.getenv("OPENROUTER_API_KEY")
-        if (apiKey.isNullOrBlank()) {
+        if (config.provider == LlmProvider.OPENROUTER && apiKey.isNullOrBlank()) {
             output.printError("OPENROUTER_API_KEY environment variable is not set.")
             terminal.println("Please set your OpenRouter API key:")
             terminal.println("  export OPENROUTER_API_KEY='your-api-key-here'")
+            terminal.println("Or use a local model with: --provider ollama")
             exitProcess(1)
         }
 
@@ -82,7 +87,7 @@ fun main(args: Array<String>) {
 }
 
 suspend fun startInteractiveCli(
-    apiKey: String,
+    apiKey: String?,
     config: llmchat.cli.CliConfig,
     output: CliOutput,
     terminal: Terminal,
@@ -94,9 +99,14 @@ suspend fun startInteractiveCli(
     val pendingNotifications = ConcurrentLinkedQueue<Pair<String, String>>()
     var taskFsm: TaskFSM? = null
 
-    val ragService: RagPipeline? = when (config.ragMode) {
-        null -> null
-        RagMode.BASIC -> {
+    val ragService: RagPipeline? = when {
+        config.ragMode == null -> null
+        apiKey == null -> {
+            output.printError("RAG requires OpenRouter API key (OPENROUTER_API_KEY). Disabled for local provider.")
+            null
+        }
+
+        config.ragMode == RagMode.BASIC -> {
             val svc = RagService.create(apiKey, topK = config.ragTopK)
             if (svc == null) {
                 output.printError("RAG mode enabled but knowledge base not found. Run /index <path> first.")
@@ -106,7 +116,7 @@ suspend fun startInteractiveCli(
             svc
         }
 
-        RagMode.ADVANCED -> {
+        config.ragMode == RagMode.ADVANCED -> {
             val svc = AdvancedRagService.create(
                 apiKey = apiKey,
                 model = config.model.openRouterModel.id,
@@ -124,7 +134,7 @@ suspend fun startInteractiveCli(
             svc
         }
 
-        RagMode.CONVERSATIONAL -> {
+        config.ragMode == RagMode.CONVERSATIONAL -> {
             val svc = ConversationalRagService.create(
                 apiKey = apiKey,
                 model = config.model.openRouterModel.id,
@@ -142,6 +152,8 @@ suspend fun startInteractiveCli(
             }
             svc
         }
+
+        else -> null
     }
 
     Runtime.getRuntime().addShutdownHook(Thread {
@@ -156,13 +168,30 @@ suspend fun startInteractiveCli(
         println("\nGoodbye!")
     })
 
-    val promptExecutor = simpleOpenRouterExecutor(apiKey)
+    val promptExecutor = when (config.provider) {
+        LlmProvider.OPENROUTER -> simpleOpenRouterExecutor(apiKey!!)
+        LlmProvider.OLLAMA -> simpleOllamaAIExecutor(config.localUrl)
+    }
+
+    val llmModel = when (config.provider) {
+        LlmProvider.OPENROUTER -> config.model.openRouterModel
+        LlmProvider.OLLAMA -> LLModel(
+            provider = LLMProvider.Ollama,
+            id = config.localModelName,
+            capabilities = listOf(
+                LLMCapability.Temperature,
+                LLMCapability.Completion,
+                LLMCapability.Tools
+            ),
+            contextLength = 8_192
+        )
+    }
 
     val agentFactory: (String, ToolRegistry) -> AIAgent<String, String> = { systemPrompt, toolRegistry ->
         AIAgent(
             promptExecutor = promptExecutor,
             systemPrompt = systemPrompt,
-            llmModel = config.model.openRouterModel,
+            llmModel = llmModel,
             temperature = config.temperature,
             toolRegistry = toolRegistry
         ) {
@@ -544,39 +573,43 @@ suspend fun startInteractiveCli(
             // ── Index commands ─────────────────────────────────────────────
 
             is Command.Index -> {
-                val directory = File(command.path)
-                if (!directory.isDirectory) {
-                    output.printError("Not a directory: ${command.path}")
+                if (apiKey == null) {
+                    output.printError("/index requires OpenRouter API key (OPENROUTER_API_KEY) for embeddings.")
                 } else {
-                    val chunker = when (command.strategy) {
-                        "fixed" -> FixedSizeChunker()
-                        else -> StructuralChunker()
-                    }
-                    val dbPath = System.getProperty("user.home") + "/.llmchat/knowledge-base.db"
-                    File(dbPath).parentFile.mkdirs()
-                    val store = SqliteVectorStore(dbPath)
-                    val embeddingClient = OpenRouterEmbeddingClient(apiKey)
+                    val directory = File(command.path)
+                    if (!directory.isDirectory) {
+                        output.printError("Not a directory: ${command.path}")
+                    } else {
+                        val chunker = when (command.strategy) {
+                            "fixed" -> FixedSizeChunker()
+                            else -> StructuralChunker()
+                        }
+                        val dbPath = System.getProperty("user.home") + "/.llmchat/knowledge-base.db"
+                        File(dbPath).parentFile.mkdirs()
+                        val store = SqliteVectorStore(dbPath)
+                        val embeddingClient = OpenRouterEmbeddingClient(apiKey)
 
-                    val pipeline = IndexPipeline(
-                        loader = DocumentLoader(),
-                        chunker = chunker,
-                        embeddingClient = embeddingClient,
-                        store = store
-                    )
+                        val pipeline = IndexPipeline(
+                            loader = DocumentLoader(),
+                            chunker = chunker,
+                            embeddingClient = embeddingClient,
+                            store = store
+                        )
 
-                    spinner.start(scope, label = "Indexing ${command.path} [${command.strategy}]...")
-                    try {
-                        val report = pipeline.run(directory, withComparison = command.report)
-                        spinner.stop()
-                        output.printIndexReport(report)
-                    } catch (e: Exception) {
-                        spinner.stop()
-                        output.printError("Indexing failed: ${e.message}")
-                    } finally {
-                        embeddingClient.close()
-                        store.close()
+                        spinner.start(scope, label = "Indexing ${command.path} [${command.strategy}]...")
+                        try {
+                            val report = pipeline.run(directory, withComparison = command.report)
+                            spinner.stop()
+                            output.printIndexReport(report)
+                        } catch (e: Exception) {
+                            spinner.stop()
+                            output.printError("Indexing failed: ${e.message}")
+                        } finally {
+                            embeddingClient.close()
+                            store.close()
+                        }
                     }
-                }
+                } // end apiKey != null
             }
 
             // ── MCP commands ───────────────────────────────────────────────

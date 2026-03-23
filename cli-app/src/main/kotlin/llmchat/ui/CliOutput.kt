@@ -29,10 +29,14 @@ import llmchat.rag.RagResult
 class CliOutput(private val terminal: Terminal) {
 
     fun printWelcome(config: CliConfig) {
+        val modelLabel = when (config.provider) {
+            llmchat.cli.LlmProvider.OPENROUTER -> config.model.displayName
+            llmchat.cli.LlmProvider.OLLAMA -> "${config.localModelName} (local)"
+        }
         terminal.println()
         terminal.println(
             bold(" LLM Chat") + dim(" | ") +
-                    cyan(config.model.displayName) + dim(" | ") +
+                    cyan(modelLabel) + dim(" | ") +
                     config.strategyType.cliName + dim(" | ") +
                     dim("/help for commands")
         )

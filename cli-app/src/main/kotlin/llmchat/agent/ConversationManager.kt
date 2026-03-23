@@ -34,6 +34,7 @@ class ConversationManager(
     private var autoMode: Boolean = false
     private var mcpToolRegistry: ToolRegistry = ToolRegistry.EMPTY
     private var mcpConnectionInfo: McpConnectionManager.ConnectionInfo? = null
+
     /** Task state block injected by ConversationalRagService after each turn. */
     private var ragTaskStateBlock: String = ""
 

@@ -1,8 +1,23 @@
 package llmchat.rag
 
-import indexer.store.SqliteVectorStore
-import indexer.embedding.OpenRouterEmbeddingClient
 import java.io.File
+import kotlin.Double
+import kotlin.Int
+import kotlin.Pair
+import kotlin.String
+import kotlin.collections.ArrayDeque
+import kotlin.collections.isNotEmpty
+import kotlin.collections.removeFirst
+import kotlin.collections.toList
+import kotlin.sequences.toList
+import kotlin.text.appendLine
+import kotlin.text.buildString
+import kotlin.text.clear
+import kotlin.text.compareTo
+import kotlin.text.isNotEmpty
+import kotlin.text.toList
+import kotlin.to
+import kotlin.toList
 
 /**
  * History-aware RAG pipeline (Phase 5: Conversational Memory).
