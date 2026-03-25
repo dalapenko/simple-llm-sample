@@ -35,8 +35,9 @@ interface Reranker : AutoCloseable {
  * 4. On parse failure, fall back to score-sorted top-K.
  */
 class LlmJudgeReranker(
-    private val apiKey: String,
-    private val model: String = "google/gemini-flash-1.5"
+    private val baseUrl: String,
+    private val model: String,
+    private val apiKey: String? = null
 ) : Reranker {
 
     private val http = HttpClient(CIO) {
@@ -55,9 +56,9 @@ class LlmJudgeReranker(
 
         return try {
             val prompt = buildJudgePrompt(query, candidates)
-            val response: ChatResponse = http.post("https://openrouter.ai/api/v1/chat/completions") {
+            val response: ChatResponse = http.post("$baseUrl/chat/completions") {
                 contentType(ContentType.Application.Json)
-                header("Authorization", "Bearer $apiKey")
+                if (apiKey != null) header("Authorization", "Bearer $apiKey")
                 setBody(ChatRequest(model = model, messages = listOf(ChatMessage("user", prompt))))
             }.body()
             val raw = response.choices.firstOrNull()?.message?.content?.trim() ?: ""

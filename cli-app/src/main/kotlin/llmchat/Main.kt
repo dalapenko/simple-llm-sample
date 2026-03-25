@@ -12,6 +12,8 @@ import com.github.ajalt.mordant.terminal.Terminal
 import indexer.chunker.FixedSizeChunker
 import indexer.chunker.StructuralChunker
 import indexer.document.DocumentLoader
+import indexer.embedding.EmbeddingClient
+import indexer.embedding.OllamaEmbeddingClient
 import indexer.embedding.OpenRouterEmbeddingClient
 import indexer.pipeline.IndexPipeline
 import indexer.store.SqliteVectorStore
@@ -99,16 +101,40 @@ suspend fun startInteractiveCli(
     val pendingNotifications = ConcurrentLinkedQueue<Pair<String, String>>()
     var taskFsm: TaskFSM? = null
 
-    val ragService: RagPipeline? = when {
+    // Resolve the embedding client and chat base URL based on the active provider.
+    // For Ollama: embeddings use the native /api/embed endpoint; chat rewriting uses
+    // the OpenAI-compatible /v1 endpoint exposed by Ollama.
+    val embeddingClientForRag: EmbeddingClient? = when {
         config.ragMode == null -> null
-        apiKey == null -> {
-            output.printError("RAG requires OpenRouter API key (OPENROUTER_API_KEY). Disabled for local provider.")
+        config.provider == LlmProvider.OLLAMA ->
+            OllamaEmbeddingClient(config.localUrl, config.localEmbeddingModel)
+
+        apiKey != null ->
+            OpenRouterEmbeddingClient(apiKey)
+
+        else -> {
+            output.printError("RAG requires OPENROUTER_API_KEY when using the openrouter provider. Disabled.")
             null
         }
+    }
+
+    val chatBaseUrlForRag: String = when (config.provider) {
+        LlmProvider.OLLAMA -> "${config.localUrl}/v1"
+        LlmProvider.OPENROUTER -> "https://openrouter.ai/api/v1"
+    }
+
+    val chatModelForRag: String = when (config.provider) {
+        LlmProvider.OLLAMA -> config.localModelName
+        LlmProvider.OPENROUTER -> config.model.openRouterModel.id
+    }
+
+    val ragService: RagPipeline? = when {
+        config.ragMode == null || embeddingClientForRag == null -> null
 
         config.ragMode == RagMode.BASIC -> {
-            val svc = RagService.create(apiKey, topK = config.ragTopK)
+            val svc = RagService.create(embeddingClientForRag, topK = config.ragTopK)
             if (svc == null) {
+                embeddingClientForRag.close()
                 output.printError("RAG mode enabled but knowledge base not found. Run /index <path> first.")
             } else {
                 output.printInfo("RAG (базовый) активен — знания загружены из ~/.llmchat/knowledge-base.db")
@@ -118,12 +144,15 @@ suspend fun startInteractiveCli(
 
         config.ragMode == RagMode.ADVANCED -> {
             val svc = AdvancedRagService.create(
+                embeddingClient = embeddingClientForRag,
+                chatBaseUrl = chatBaseUrlForRag,
+                model = chatModelForRag,
                 apiKey = apiKey,
-                model = config.model.openRouterModel.id,
                 similarityThreshold = config.similarityThreshold,
                 finalTopK = config.ragTopK
             )
             if (svc == null) {
+                embeddingClientForRag.close()
                 output.printError("RAG mode enabled but knowledge base not found. Run /index <path> first.")
             } else {
                 output.printInfo(
@@ -136,12 +165,15 @@ suspend fun startInteractiveCli(
 
         config.ragMode == RagMode.CONVERSATIONAL -> {
             val svc = ConversationalRagService.create(
+                embeddingClient = embeddingClientForRag,
+                chatBaseUrl = chatBaseUrlForRag,
+                model = chatModelForRag,
                 apiKey = apiKey,
-                model = config.model.openRouterModel.id,
                 similarityThreshold = config.similarityThreshold,
                 finalTopK = config.ragTopK
             )
             if (svc == null) {
+                embeddingClientForRag.close()
                 output.printError("RAG mode enabled but knowledge base not found. Run /index <path> first.")
             } else {
                 output.printInfo(
@@ -573,8 +605,9 @@ suspend fun startInteractiveCli(
             // ── Index commands ─────────────────────────────────────────────
 
             is Command.Index -> {
-                if (apiKey == null) {
-                    output.printError("/index requires OpenRouter API key (OPENROUTER_API_KEY) for embeddings.")
+                val canIndex = config.provider == LlmProvider.OLLAMA || apiKey != null
+                if (!canIndex) {
+                    output.printError("/index requires OPENROUTER_API_KEY when using the openrouter provider.")
                 } else {
                     val directory = File(command.path)
                     if (!directory.isDirectory) {
@@ -587,7 +620,13 @@ suspend fun startInteractiveCli(
                         val dbPath = System.getProperty("user.home") + "/.llmchat/knowledge-base.db"
                         File(dbPath).parentFile.mkdirs()
                         val store = SqliteVectorStore(dbPath)
-                        val embeddingClient = OpenRouterEmbeddingClient(apiKey)
+                        val embeddingClient: EmbeddingClient = when (config.provider) {
+                            LlmProvider.OLLAMA ->
+                                OllamaEmbeddingClient(config.localUrl, config.localEmbeddingModel)
+
+                            LlmProvider.OPENROUTER ->
+                                OpenRouterEmbeddingClient(apiKey!!)
+                        }
 
                         val pipeline = IndexPipeline(
                             loader = DocumentLoader(),
@@ -596,7 +635,14 @@ suspend fun startInteractiveCli(
                             store = store
                         )
 
-                        spinner.start(scope, label = "Indexing ${command.path} [${command.strategy}]...")
+                        val providerLabel = when (config.provider) {
+                            LlmProvider.OLLAMA -> "ollama/${config.localEmbeddingModel}"
+                            LlmProvider.OPENROUTER -> "openrouter/text-embedding-3-small"
+                        }
+                        spinner.start(
+                            scope,
+                            label = "Indexing ${command.path} [${command.strategy}] via $providerLabel..."
+                        )
                         try {
                             val report = pipeline.run(directory, withComparison = command.report)
                             spinner.stop()
@@ -609,7 +655,7 @@ suspend fun startInteractiveCli(
                             store.close()
                         }
                     }
-                } // end apiKey != null
+                }
             }
 
             // ── MCP commands ───────────────────────────────────────────────

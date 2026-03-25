@@ -1,6 +1,6 @@
 package llmchat.rag
 
-import indexer.embedding.OpenRouterEmbeddingClient
+import indexer.embedding.EmbeddingClient
 import indexer.search.ContextAssembler
 import indexer.search.SearchService
 import indexer.store.SqliteVectorStore
@@ -27,7 +27,7 @@ interface RagPipeline : AutoCloseable {
 
 class RagService(
     private val searchService: SearchService,
-    private val embeddingClient: OpenRouterEmbeddingClient,
+    private val embeddingClient: EmbeddingClient,
     private val vectorStore: SqliteVectorStore,
     private val topK: Int = 5
 ) : RagPipeline {
@@ -52,12 +52,11 @@ class RagService(
         private const val DEFAULT_DB_PATH = "/.llmchat/knowledge-base.db"
 
         fun create(
-            apiKey: String,
+            embeddingClient: EmbeddingClient,
             dbPath: String = System.getProperty("user.home") + DEFAULT_DB_PATH,
             topK: Int = 5
         ): RagService? {
             if (!File(dbPath).exists()) return null
-            val embeddingClient = OpenRouterEmbeddingClient(apiKey)
             val store = SqliteVectorStore(dbPath)
             val searchService = SearchService(embeddingClient, store)
             return RagService(searchService, embeddingClient, store, topK)

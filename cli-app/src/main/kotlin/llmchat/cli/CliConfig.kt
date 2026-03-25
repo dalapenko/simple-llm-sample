@@ -16,7 +16,8 @@ data class CliConfig(
     val ragTopK: Int = 5,
     val provider: LlmProvider = LlmProvider.default,
     val localModelName: String = "llama3.2",
-    val localUrl: String = "http://localhost:11434"
+    val localUrl: String = "http://localhost:11434",
+    val localEmbeddingModel: String = "nomic-embed-text"
 ) {
     val ragEnabled: Boolean get() = ragMode != null
 }

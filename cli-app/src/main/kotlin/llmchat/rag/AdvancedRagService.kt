@@ -1,6 +1,6 @@
 package llmchat.rag
 
-import indexer.embedding.OpenRouterEmbeddingClient
+import indexer.embedding.EmbeddingClient
 import indexer.embedding.cosineSimilarity
 import indexer.search.ContextAssembler
 import indexer.store.SqliteVectorStore
@@ -42,7 +42,7 @@ private const val LOW_RELEVANCE_MESSAGE =
             "Пожалуйста, уточните запрос или добавьте новые данные в базу знаний."
 
 class AdvancedRagService(
-    private val embeddingClient: OpenRouterEmbeddingClient,
+    private val embeddingClient: EmbeddingClient,
     private val vectorStore: SqliteVectorStore,
     private val queryRewriter: QueryRewriter,
     private val reranker: LlmJudgeReranker,
@@ -143,21 +143,22 @@ class AdvancedRagService(
         private const val DEFAULT_DB_PATH = "/.llmchat/knowledge-base.db"
 
         fun create(
-            apiKey: String,
+            embeddingClient: EmbeddingClient,
+            chatBaseUrl: String,
             model: String,
+            apiKey: String? = null,
             dbPath: String = System.getProperty("user.home") + DEFAULT_DB_PATH,
             similarityThreshold: Double = 0.65,
             initialTopK: Int = 10,
             finalTopK: Int = 3
         ): AdvancedRagService? {
             if (!File(dbPath).exists()) return null
-            val embeddingClient = OpenRouterEmbeddingClient(apiKey)
             val store = SqliteVectorStore(dbPath)
             return AdvancedRagService(
                 embeddingClient = embeddingClient,
                 vectorStore = store,
-                queryRewriter = QueryRewriter(apiKey, model),
-                reranker = LlmJudgeReranker(apiKey, model),
+                queryRewriter = QueryRewriter(chatBaseUrl, model, apiKey),
+                reranker = LlmJudgeReranker(chatBaseUrl, model, apiKey),
                 similarityThreshold = similarityThreshold,
                 initialTopK = initialTopK,
                 finalTopK = finalTopK

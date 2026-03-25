@@ -24,8 +24,9 @@ import kotlinx.serialization.json.Json
  * Falls back to the original query on any network/parsing error.
  */
 class QueryRewriter(
-    private val apiKey: String,
-    private val model: String = "google/gemini-flash-1.5"
+    private val baseUrl: String,
+    private val model: String,
+    private val apiKey: String? = null
 ) : AutoCloseable {
 
     private val http = HttpClient(CIO) {
@@ -36,9 +37,9 @@ class QueryRewriter(
 
     suspend fun rewrite(query: String): String {
         return try {
-            val response: ChatResponse = http.post("https://openrouter.ai/api/v1/chat/completions") {
+            val response: ChatResponse = http.post("$baseUrl/chat/completions") {
                 contentType(ContentType.Application.Json)
-                header("Authorization", "Bearer $apiKey")
+                if (apiKey != null) header("Authorization", "Bearer $apiKey")
                 setBody(ChatRequest(model = model, messages = listOf(ChatMessage("user", buildPrompt(query)))))
             }.body()
             response.choices.firstOrNull()?.message?.content?.trim() ?: query

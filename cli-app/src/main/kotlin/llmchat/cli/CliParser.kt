@@ -29,6 +29,7 @@ object CliParser {
         var provider = LlmProvider.default
         var localModelName = "llama3.2"
         var localUrl = "http://localhost:11434"
+        var localEmbeddingModel = "nomic-embed-text"
 
         var i = 0
         while (i < args.size) {
@@ -200,6 +201,15 @@ object CliParser {
                     }
                 }
 
+                "--embedding-model" -> {
+                    if (i + 1 < args.size) {
+                        localEmbeddingModel = args[i + 1]
+                        i += 2
+                    } else {
+                        throw IllegalArgumentException("--embedding-model requires an argument")
+                    }
+                }
+
                 else -> {
                     throw IllegalArgumentException("Unknown argument: ${args[i]}")
                 }
@@ -219,7 +229,8 @@ object CliParser {
             ragTopK,
             provider,
             localModelName,
-            localUrl
+            localUrl,
+            localEmbeddingModel
         )
     }
 
@@ -265,6 +276,9 @@ ${SupportedModel.entries.joinToString("\n") { "                                 
               --local-model NAME        Model name for Ollama (default: llama3.2)
                                         Examples: llama3.2, mistral, qwen2.5:7b, phi4
               --local-url URL           Ollama server URL (default: http://localhost:11434)
+              --embedding-model NAME    Ollama embedding model for /index and RAG (default: nomic-embed-text)
+                                        Examples: nomic-embed-text (768d), mxbai-embed-large (1024d), all-minilm (384d)
+                                        Note: index and RAG must use the same embedding model.
 
             Interactive Commands:
               /help       Show available commands

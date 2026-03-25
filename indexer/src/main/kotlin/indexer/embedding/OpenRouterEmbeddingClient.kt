@@ -40,7 +40,7 @@ class OpenRouterEmbeddingClient(
         return response.data.first().embedding.toFloatArray()
     }
 
-    fun close() = http.close()
+    override fun close() = http.close()
 
     // ── Wire types ───────────────────────────────────────────────────────────────
 

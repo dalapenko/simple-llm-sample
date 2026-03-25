@@ -42,8 +42,9 @@ data class TaskState(
  * even as conversation history is compressed by the sliding window strategy.
  */
 class TaskStateManager(
-    private val apiKey: String,
-    private val model: String = "google/gemini-flash-1.5"
+    private val baseUrl: String,
+    private val model: String,
+    private val apiKey: String? = null
 ) : AutoCloseable {
 
     private val http = HttpClient(CIO) {
@@ -70,9 +71,9 @@ class TaskStateManager(
     suspend fun updateFromTurn(userMessage: String, assistantResponse: String) {
         try {
             val prompt = buildExtractionPrompt(userMessage, assistantResponse, state)
-            val response: ChatResponse = http.post("https://openrouter.ai/api/v1/chat/completions") {
+            val response: ChatResponse = http.post("$baseUrl/chat/completions") {
                 contentType(ContentType.Application.Json)
-                header("Authorization", "Bearer $apiKey")
+                if (apiKey != null) header("Authorization", "Bearer $apiKey")
                 setBody(ChatRequest(model = model, messages = listOf(ChatMessage("user", prompt))))
             }.body()
             val text = response.choices.firstOrNull()?.message?.content?.trim() ?: return

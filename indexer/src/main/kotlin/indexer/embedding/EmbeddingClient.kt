@@ -3,12 +3,15 @@ package indexer.embedding
 /**
  * Provider-agnostic interface for generating fixed-dimension text embeddings.
  */
-interface EmbeddingClient {
+interface EmbeddingClient : AutoCloseable {
     /** Generates an embedding vector for the given [text]. */
     suspend fun embed(text: String): FloatArray
 
     /** Dimensionality of the returned vectors. */
     val dimensions: Int
+
+    /** Default no-op close; implementations that own an HTTP client should override. */
+    override fun close() {}
 }
 
 /**

@@ -25,8 +25,9 @@ import kotlinx.serialization.json.Json
  *   raw query → contextual condensation → standalone query → HyDE expansion → vector query
  */
 class HistoryAwareQueryRewriter(
-    private val apiKey: String,
-    private val model: String = "google/gemini-flash-1.5"
+    private val baseUrl: String,
+    private val model: String,
+    private val apiKey: String? = null
 ) : AutoCloseable {
 
     private val http = HttpClient(CIO) {
@@ -49,9 +50,9 @@ class HistoryAwareQueryRewriter(
     ): String {
         if (history.isEmpty() && taskState.goal == null) return query
         return try {
-            val response: ChatResponse = http.post("https://openrouter.ai/api/v1/chat/completions") {
+            val response: ChatResponse = http.post("$baseUrl/chat/completions") {
                 contentType(ContentType.Application.Json)
-                header("Authorization", "Bearer $apiKey")
+                if (apiKey != null) header("Authorization", "Bearer $apiKey")
                 setBody(
                     ChatRequest(
                         model = model,

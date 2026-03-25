@@ -1,23 +1,6 @@
 package llmchat.rag
 
 import java.io.File
-import kotlin.Double
-import kotlin.Int
-import kotlin.Pair
-import kotlin.String
-import kotlin.collections.ArrayDeque
-import kotlin.collections.isNotEmpty
-import kotlin.collections.removeFirst
-import kotlin.collections.toList
-import kotlin.sequences.toList
-import kotlin.text.appendLine
-import kotlin.text.buildString
-import kotlin.text.clear
-import kotlin.text.compareTo
-import kotlin.text.isNotEmpty
-import kotlin.text.toList
-import kotlin.to
-import kotlin.toList
 
 /**
  * History-aware RAG pipeline (Phase 5: Conversational Memory).
@@ -106,8 +89,10 @@ class ConversationalRagService(
         private const val DEFAULT_DB_PATH = "/.llmchat/knowledge-base.db"
 
         fun create(
-            apiKey: String,
+            embeddingClient: indexer.embedding.EmbeddingClient,
+            chatBaseUrl: String,
             model: String,
+            apiKey: String? = null,
             dbPath: String = System.getProperty("user.home") + DEFAULT_DB_PATH,
             similarityThreshold: Double = 0.65,
             finalTopK: Int = 3,
@@ -115,16 +100,18 @@ class ConversationalRagService(
         ): ConversationalRagService? {
             if (!File(dbPath).exists()) return null
             val inner = AdvancedRagService.create(
-                apiKey = apiKey,
+                embeddingClient = embeddingClient,
+                chatBaseUrl = chatBaseUrl,
                 model = model,
+                apiKey = apiKey,
                 dbPath = dbPath,
                 similarityThreshold = similarityThreshold,
                 finalTopK = finalTopK
             ) ?: return null
             return ConversationalRagService(
                 inner = inner,
-                historyRewriter = HistoryAwareQueryRewriter(apiKey, model),
-                taskStateManager = TaskStateManager(apiKey, model),
+                historyRewriter = HistoryAwareQueryRewriter(chatBaseUrl, model, apiKey),
+                taskStateManager = TaskStateManager(chatBaseUrl, model, apiKey),
                 historyWindowSize = historyWindowSize
             )
         }
