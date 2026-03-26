@@ -17,7 +17,13 @@ data class CliConfig(
     val provider: LlmProvider = LlmProvider.default,
     val localModelName: String = "llama3.2",
     val localUrl: String = "http://localhost:11434",
-    val localEmbeddingModel: String = "nomic-embed-text"
+    val localEmbeddingModel: String = "nomic-embed-text",
+    /** Maximum tokens to generate per response. Maps to Ollama's num_predict. Null = model default. */
+    val localMaxTokens: Int? = null,
+    /** Context window size passed to Ollama (num_ctx) and used as LLModel.contextLength. Null = Ollama default. */
+    val localContextLength: Int? = null,
+    /** Name of the active preset, if loaded via --preset. Informational only. */
+    val presetName: String? = null,
 ) {
     val ragEnabled: Boolean get() = ragMode != null
 }

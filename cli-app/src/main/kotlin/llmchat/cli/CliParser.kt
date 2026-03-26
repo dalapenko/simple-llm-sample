@@ -30,6 +30,12 @@ object CliParser {
         var localModelName = "llama3.2"
         var localUrl = "http://localhost:11434"
         var localEmbeddingModel = "nomic-embed-text"
+        var localMaxTokens: Int? = null
+        var localContextLength: Int? = null
+        var presetName: String? = null
+
+        // Track fields explicitly set by the user so preset values don't overwrite them.
+        val explicitlySet = mutableSetOf<String>()
 
         var i = 0
         while (i < args.size) {
@@ -42,6 +48,7 @@ object CliParser {
                 "--system-prompt" -> {
                     if (i + 1 < args.size) {
                         systemPrompt = args[i + 1]
+                        explicitlySet += "systemPrompt"
                         i += 2
                     } else {
                         throw IllegalArgumentException("--system-prompt requires an argument")
@@ -58,6 +65,7 @@ object CliParser {
                         } catch (_: NumberFormatException) {
                             throw IllegalArgumentException("--temperature must be a valid number")
                         }
+                        explicitlySet += "temperature"
                         i += 2
                     } else {
                         throw IllegalArgumentException("--temperature requires an argument")
@@ -83,6 +91,7 @@ object CliParser {
                             ?: throw IllegalArgumentException("--context-window must be a positive integer")
                         if (n < 1) throw IllegalArgumentException("--context-window must be >= 1")
                         contextWindowSize = n
+                        explicitlySet += "contextWindow"
                         i += 2
                     } else {
                         throw IllegalArgumentException("--context-window requires an argument")
@@ -186,6 +195,7 @@ object CliParser {
                 "--local-model" -> {
                     if (i + 1 < args.size) {
                         localModelName = args[i + 1]
+                        explicitlySet += "localModel"
                         i += 2
                     } else {
                         throw IllegalArgumentException("--local-model requires an argument")
@@ -210,11 +220,62 @@ object CliParser {
                     }
                 }
 
+                "--preset" -> {
+                    if (i + 1 < args.size) {
+                        presetName = args[i + 1]
+                        i += 2
+                    } else {
+                        throw IllegalArgumentException("--preset requires a name argument")
+                    }
+                }
+
+                "--local-max-tokens" -> {
+                    if (i + 1 < args.size) {
+                        val n = args[i + 1].toIntOrNull()
+                            ?: throw IllegalArgumentException("--local-max-tokens must be a positive integer")
+                        if (n < 1) throw IllegalArgumentException("--local-max-tokens must be >= 1")
+                        localMaxTokens = n
+                        explicitlySet += "localMaxTokens"
+                        i += 2
+                    } else {
+                        throw IllegalArgumentException("--local-max-tokens requires an argument")
+                    }
+                }
+
+                "--local-context-length" -> {
+                    if (i + 1 < args.size) {
+                        val n = args[i + 1].toIntOrNull()
+                            ?: throw IllegalArgumentException("--local-context-length must be a positive integer")
+                        if (n < 1) throw IllegalArgumentException("--local-context-length must be >= 1")
+                        localContextLength = n
+                        explicitlySet += "localContextLength"
+                        i += 2
+                    } else {
+                        throw IllegalArgumentException("--local-context-length requires an argument")
+                    }
+                }
+
                 else -> {
                     throw IllegalArgumentException("Unknown argument: ${args[i]}")
                 }
             }
         }
+
+        // Apply preset: fill in any field the user did not explicitly set.
+        val preset = presetName?.let { name ->
+            PresetLoader.load(name)
+                ?: throw IllegalArgumentException(
+                    "Unknown preset: '$name'. Available: ${PresetLoader.availableNames.joinToString(", ")}" +
+                            "\nCustom presets can be placed in ./presets/<name>.json or ~/.llmchat/presets/<name>.json"
+                )
+        }
+
+        if ("systemPrompt" !in explicitlySet) preset?.systemPrompt?.let { systemPrompt = it }
+        if ("temperature" !in explicitlySet) preset?.temperature?.let { temperature = it }
+        if ("contextWindow" !in explicitlySet) preset?.contextWindow?.let { contextWindowSize = it }
+        if ("localModel" !in explicitlySet) preset?.localModel?.let { localModelName = it }
+        if ("localMaxTokens" !in explicitlySet) preset?.maxTokens?.let { localMaxTokens = it }
+        if ("localContextLength" !in explicitlySet) preset?.contextLength?.let { localContextLength = it }
 
         return CliConfig(
             systemPrompt,
@@ -230,7 +291,10 @@ object CliParser {
             provider,
             localModelName,
             localUrl,
-            localEmbeddingModel
+            localEmbeddingModel,
+            localMaxTokens,
+            localContextLength,
+            presetName,
         )
     }
 
@@ -275,7 +339,16 @@ ${SupportedModel.entries.joinToString("\n") { "                                 
                                         Available: ${LlmProvider.availableNames.joinToString(", ")}
               --local-model NAME        Model name for Ollama (default: llama3.2)
                                         Examples: llama3.2, mistral, qwen2.5:7b, phi4
+                                        Quantization via tag: qwen2.5-coder:7b-q4_K_M, llama3.2:3b-q8_0
               --local-url URL           Ollama server URL (default: http://localhost:11434)
+              --local-max-tokens N      Max tokens to generate per response (Ollama: num_predict)
+                                        Limits output length. Does not affect the input context window.
+              --local-context-length N  Context window size sent to Ollama (num_ctx, default: Ollama default)
+                                        Also sets the model's token budget for Koog's sliding window.
+                                        Requires enough VRAM/RAM for the requested size.
+              --preset NAME             Apply a named configuration preset (overridable by other flags)
+                                        Built-in: ${PresetLoader.availableNames.joinToString(", ")}
+                                        Custom: ./presets/<name>.json or ~/.llmchat/presets/<name>.json
               --embedding-model NAME    Ollama embedding model for /index and RAG (default: nomic-embed-text)
                                         Examples: nomic-embed-text (768d), mxbai-embed-large (1024d), all-minilm (384d)
                                         Note: index and RAG must use the same embedding model.
@@ -299,6 +372,12 @@ ${SupportedModel.entries.joinToString("\n") { "                                 
               ./gradlew run --args="--provider ollama"
               ./gradlew run --args="--provider ollama --local-model mistral"
               ./gradlew run --args="--provider ollama --local-model qwen2.5:7b --local-url http://192.168.1.10:11434"
+              ./gradlew run --args="--provider ollama --local-max-tokens 2048 --local-context-length 16384"
+
+            Examples (presets — for A/B comparison):
+              ./gradlew run --args="--provider ollama --preset baseline"
+              ./gradlew run --args="--provider ollama --preset code-review"
+              ./gradlew run --args="--provider ollama --preset code-review --temperature 0.3"  (override one field)
 
             Environment Variables:
               OPENROUTER_API_KEY    Required for --provider openrouter (default). Not needed for local providers.

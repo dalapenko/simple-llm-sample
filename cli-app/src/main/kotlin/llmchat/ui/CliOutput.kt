@@ -40,6 +40,15 @@ class CliOutput(private val terminal: Terminal) {
                     config.strategyType.cliName + dim(" | ") +
                     dim("/help for commands")
         )
+        if (config.provider == llmchat.cli.LlmProvider.OLLAMA) {
+            val parts = buildList {
+                if (config.presetName != null) add("preset=${config.presetName}")
+                add("temp=${config.temperature}")
+                if (config.localMaxTokens != null) add("maxTokens=${config.localMaxTokens}")
+                if (config.localContextLength != null) add("ctx=${config.localContextLength}")
+            }
+            if (parts.isNotEmpty()) terminal.println(dim("  " + parts.joinToString("  ")))
+        }
         terminal.println(dim("─".repeat(72)))
         terminal.println()
     }

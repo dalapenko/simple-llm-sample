@@ -1,0 +1,10 @@
+{
+  "name": "baseline-local",
+  "description": "Baseline configuration for local Ollama — no optimisation applied. Use this as the control in A/B comparisons against code-review-optimized.",
+  "temperature": 1.0,
+  "maxTokens": null,
+  "contextLength": null,
+  "contextWindow": 10,
+  "localModel": "llama3.2",
+  "systemPrompt": "You are a helpful assistant. Answer user questions concisely."
+}

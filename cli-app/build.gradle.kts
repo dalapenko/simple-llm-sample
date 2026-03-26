@@ -16,6 +16,8 @@ dependencies {
     implementation(libs.koog.agents)
     implementation(libs.koog.agents.mcp)
     implementation(libs.koog.agents.features.trace)
+    implementation(libs.koog.executor.ollama.client)
+    implementation(libs.koog.executor.llms)
     implementation(libs.kotlinx.serialization.json)
 
     // TUI: colored output, animated spinner

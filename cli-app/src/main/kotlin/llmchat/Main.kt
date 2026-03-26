@@ -1,13 +1,18 @@
 package llmchat
 
 import ai.koog.agents.core.agent.AIAgent
+import ai.koog.agents.core.agent.config.AIAgentConfig
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.features.tracing.feature.Tracing
-import ai.koog.prompt.executor.llms.all.simpleOllamaAIExecutor
+import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.executor.llms.SingleLLMPromptExecutor
 import ai.koog.prompt.executor.llms.all.simpleOpenRouterExecutor
+import ai.koog.prompt.executor.ollama.client.ContextWindowStrategy
+import ai.koog.prompt.executor.ollama.client.OllamaClient
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
+import ai.koog.prompt.params.LLMParams
 import com.github.ajalt.mordant.terminal.Terminal
 import indexer.chunker.FixedSizeChunker
 import indexer.chunker.StructuralChunker
@@ -202,7 +207,21 @@ suspend fun startInteractiveCli(
 
     val promptExecutor = when (config.provider) {
         LlmProvider.OPENROUTER -> simpleOpenRouterExecutor(apiKey!!)
-        LlmProvider.OLLAMA -> simpleOllamaAIExecutor(config.localUrl)
+        LlmProvider.OLLAMA -> {
+            // When a custom context length is requested, create OllamaClient directly so that
+            // ContextWindowStrategy.Fixed sends the correct num_ctx in every chat request.
+            // With ContextWindowStrategy.None (the default), Ollama uses its own default (2048)
+            // unless the model was started with a different OLLAMA_CONTEXT_LENGTH env var.
+            val client = if (config.localContextLength != null) {
+                OllamaClient(
+                    baseUrl = config.localUrl,
+                    contextWindowStrategy = ContextWindowStrategy.Companion.Fixed(config.localContextLength.toLong())
+                )
+            } else {
+                OllamaClient(baseUrl = config.localUrl)
+            }
+            SingleLLMPromptExecutor(client)
+        }
     }
 
     val llmModel = when (config.provider) {
@@ -215,20 +234,50 @@ suspend fun startInteractiveCli(
                 LLMCapability.Completion,
                 LLMCapability.Tools
             ),
-            contextLength = 8_192
+            // contextLength here informs Koog's token-budget calculations and acts as the
+            // upper bound for ContextWindowStrategy.Fixed. Match it to localContextLength
+            // when set; otherwise fall back to a conservative 8 192-token default.
+            contextLength = (config.localContextLength ?: 8_192).toLong()
         )
     }
 
     val agentFactory: (String, ToolRegistry) -> AIAgent<String, String> = { systemPrompt, toolRegistry ->
-        AIAgent(
-            promptExecutor = promptExecutor,
-            systemPrompt = systemPrompt,
-            llmModel = llmModel,
-            temperature = config.temperature,
-            toolRegistry = toolRegistry
-        ) {
-            install(Tracing) {
-                addMessageProcessor(McpToolCallDisplayProcessor(output))
+        // Use AIAgentConfig when maxTokens is configured so that LLMParams.maxTokens is
+        // forwarded to the executor (the simplified AIAgent constructor does not expose it).
+        if (config.localMaxTokens != null) {
+            val agentConfig = AIAgentConfig(
+                prompt = prompt(
+                    id = "chat",
+                    params = LLMParams(
+                        temperature = config.temperature,
+                        maxTokens = config.localMaxTokens
+                    )
+                ) {
+                    system(systemPrompt)
+                },
+                model = llmModel,
+                maxAgentIterations = 50,
+            )
+            AIAgent(
+                promptExecutor = promptExecutor,
+                agentConfig = agentConfig,
+                toolRegistry = toolRegistry,
+            ) {
+                install(Tracing) {
+                    addMessageProcessor(McpToolCallDisplayProcessor(output))
+                }
+            }
+        } else {
+            AIAgent(
+                promptExecutor = promptExecutor,
+                systemPrompt = systemPrompt,
+                llmModel = llmModel,
+                temperature = config.temperature,
+                toolRegistry = toolRegistry
+            ) {
+                install(Tracing) {
+                    addMessageProcessor(McpToolCallDisplayProcessor(output))
+                }
             }
         }
     }
