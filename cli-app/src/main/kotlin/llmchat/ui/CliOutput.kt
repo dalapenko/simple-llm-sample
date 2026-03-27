@@ -31,7 +31,15 @@ class CliOutput(private val terminal: Terminal) {
     fun printWelcome(config: CliConfig) {
         val modelLabel = when (config.provider) {
             llmchat.cli.LlmProvider.OPENROUTER -> config.model.displayName
-            llmchat.cli.LlmProvider.OLLAMA -> "${config.localModelName} (local)"
+            llmchat.cli.LlmProvider.OLLAMA -> {
+                val defaultUrl = "http://localhost:11434"
+                if (config.localUrl == defaultUrl) {
+                    "${config.localModelName} (local)"
+                } else {
+                    val host = config.localUrl.removePrefix("http://").removePrefix("https://")
+                    "${config.localModelName} @ $host"
+                }
+            }
         }
         terminal.println()
         terminal.println(
