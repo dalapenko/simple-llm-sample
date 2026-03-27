@@ -30,11 +30,17 @@ class RagModeTest {
     // ── availableNames ────────────────────────────────────────────────────────
 
     @Test
-    fun `availableNames contains exactly basic and advanced`() {
+    fun `fromCliName conversational returns CONVERSATIONAL`() {
+        assertEquals(RagMode.CONVERSATIONAL, RagMode.fromCliName("conversational"))
+    }
+
+    @Test
+    fun `availableNames contains exactly basic, advanced and conversational`() {
         val names = RagMode.availableNames
-        assertEquals(2, names.size)
+        assertEquals(3, names.size)
         assertTrue("basic" in names)
         assertTrue("advanced" in names)
+        assertTrue("conversational" in names)
     }
 
     // ── CliConfig.ragEnabled ──────────────────────────────────────────────────

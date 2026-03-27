@@ -35,6 +35,7 @@ import llmchat.agent.invariant.InvariantStorage
 import llmchat.agent.mcp.McpConnectionManager
 import llmchat.agent.memory.MemoryLayer
 import llmchat.agent.profile.ProfileManager
+import llmchat.agent.strategy.chatSingleRunGraphStrategy
 import llmchat.agent.task.TaskFSM
 import llmchat.agent.task.TaskStage
 import llmchat.agent.task.TaskStateStorage
@@ -261,6 +262,7 @@ suspend fun startInteractiveCli(
             AIAgent(
                 promptExecutor = promptExecutor,
                 agentConfig = agentConfig,
+                strategy = chatSingleRunGraphStrategy(),
                 toolRegistry = toolRegistry,
             ) {
                 install(Tracing) {
@@ -270,10 +272,11 @@ suspend fun startInteractiveCli(
         } else {
             AIAgent(
                 promptExecutor = promptExecutor,
-                systemPrompt = systemPrompt,
                 llmModel = llmModel,
+                strategy = chatSingleRunGraphStrategy(),
+                systemPrompt = systemPrompt,
                 temperature = config.temperature,
-                toolRegistry = toolRegistry
+                toolRegistry = toolRegistry,
             ) {
                 install(Tracing) {
                     addMessageProcessor(McpToolCallDisplayProcessor(output))
