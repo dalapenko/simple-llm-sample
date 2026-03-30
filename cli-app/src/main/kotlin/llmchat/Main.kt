@@ -380,7 +380,22 @@ suspend fun startInteractiveCli(
                 break
             }
 
-            is Command.Help -> output.printInteractiveHelp(config.strategyType)
+            is Command.Help -> {
+                if (ragService != null) {
+                    val helpQuery = "Дай полный обзор этого проекта: что он делает, как устроен, " +
+                            "основные возможности и команды. Если доступны git-инструменты — " +
+                            "проверь текущую ветку и состояние репозитория."
+                    val ragResult = ragService.augment(helpQuery)
+                    output.printRagInfo(ragResult)
+                    if (!ragResult.lowRelevance) {
+                        handleMessage(conversationManager, ragResult.augmentedMessage, output, spinner, scope)
+                    } else {
+                        output.printInteractiveHelp(config.strategyType)
+                    }
+                } else {
+                    output.printInteractiveHelp(config.strategyType)
+                }
+            }
 
             is Command.Clear -> {
                 conversationManager.clearHistory()
