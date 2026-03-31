@@ -85,7 +85,11 @@ fun main(args: Array<String>) {
         }
 
         runBlocking {
-            startInteractiveCli(apiKey, config, output, terminal, this)
+            if (config.headlessMode) {
+                startHeadlessCli(apiKey, config, output)
+            } else {
+                startInteractiveCli(apiKey, config, output, terminal, this)
+            }
         }
     } catch (e: Exception) {
         output.printError("Fatal error: ${e.message}")
@@ -861,6 +865,204 @@ suspend fun startInteractiveCli(
     }
 
     inputReader.close()
+}
+
+private const val PR_REVIEW_SYSTEM_PROMPT = """You are an expert Kotlin code reviewer performing a pull request review.
+Analyze the provided git diff carefully and produce a structured review.
+
+Focus on:
+1. Potential Bugs — logic errors, null-safety issues (Kotlin NPE risks), unhandled edge cases
+2. Architectural Consistency — do the changes align with existing patterns, naming conventions, and module structure?
+3. Security Concerns — input validation, injection risks, credential exposure, improper error handling
+4. Kotlin Best Practices — proper use of coroutines, sealed classes, extension functions, idiomatic Kotlin
+5. Improvement Suggestions — cleaner abstractions, better use of the standard library
+
+Output format — use these Markdown sections:
+## Critical Issues
+## High Priority
+## Medium Priority
+## Suggestions
+## Summary
+
+For each finding state the file and approximate line from the diff, describe the issue concisely, and provide a concrete fix.
+If no issues are found in a category write "None identified."
+Do NOT describe what the code does. Focus solely on problems and improvements."""
+
+private const val MAX_DIFF_CHARS = 30_000
+
+suspend fun startHeadlessCli(
+    apiKey: String?,
+    config: llmchat.cli.CliConfig,
+    output: CliOutput,
+) {
+    // Build RAG index from a local path if requested (CI cache-miss path).
+    if (config.buildIndexPath != null) {
+        val indexDir = File(config.buildIndexPath)
+        val dbPath = System.getProperty("user.home") + "/.llmchat/knowledge-base.db"
+        if (!File(dbPath).exists()) {
+            System.err.println("[headless] Building RAG index from: ${indexDir.absolutePath}")
+            val canIndex = config.provider == LlmProvider.OLLAMA || apiKey != null
+            if (!canIndex) {
+                System.err.println("[headless] WARNING: Cannot build index without OPENROUTER_API_KEY. Skipping.")
+            } else if (!indexDir.isDirectory) {
+                System.err.println("[headless] WARNING: --build-index path is not a directory: ${config.buildIndexPath}. Skipping.")
+            } else {
+                val embeddingClient: EmbeddingClient = when (config.provider) {
+                    LlmProvider.OLLAMA -> OllamaEmbeddingClient(config.localUrl, config.localEmbeddingModel)
+                    LlmProvider.OPENROUTER -> OpenRouterEmbeddingClient(apiKey!!)
+                }
+                File(dbPath).parentFile.mkdirs()
+                val store = SqliteVectorStore(dbPath)
+                val pipeline = IndexPipeline(
+                    loader = DocumentLoader(),
+                    chunker = StructuralChunker(),
+                    embeddingClient = embeddingClient,
+                    store = store
+                )
+                try {
+                    val report = pipeline.run(indexDir, withComparison = false)
+                    System.err.println("[headless] Index complete: ${report.primaryStrategy.totalChunks} chunks from ${report.filesProcessed} files")
+                } catch (e: Exception) {
+                    System.err.println("[headless] WARNING: Indexing failed: ${e.message}. Proceeding without RAG.")
+                } finally {
+                    embeddingClient.close()
+                    store.close()
+                }
+            }
+        } else {
+            System.err.println("[headless] RAG index already exists — skipping build.")
+        }
+    }
+
+    // Read diff content from file or stdin.
+    val diffContent = if (config.diffFilePath != null) {
+        val file = File(config.diffFilePath)
+        if (!file.exists()) {
+            System.err.println("ERROR: Diff file not found: ${config.diffFilePath}")
+            exitProcess(1)
+        }
+        file.readText()
+    } else {
+        System.`in`.bufferedReader().readText()
+    }
+
+    if (diffContent.isBlank()) {
+        System.err.println("ERROR: No diff content provided. Use --diff-file <path> or pipe via stdin.")
+        exitProcess(1)
+    }
+
+    // Initialize RAG (optional, same pattern as interactive mode).
+    val embeddingClientForRag: EmbeddingClient? = when {
+        config.ragMode == null -> null
+        config.provider == LlmProvider.OLLAMA ->
+            OllamaEmbeddingClient(config.localUrl, config.localEmbeddingModel)
+
+        apiKey != null ->
+            OpenRouterEmbeddingClient(apiKey)
+
+        else -> {
+            System.err.println("[headless] WARNING: RAG requires OPENROUTER_API_KEY. Proceeding without RAG.")
+            null
+        }
+    }
+
+    val ragService: RagPipeline? = if (embeddingClientForRag != null) {
+        val svc = RagService.create(embeddingClientForRag, topK = config.ragTopK)
+        if (svc == null) {
+            embeddingClientForRag.close()
+            System.err.println("[headless] WARNING: Knowledge base not found. Run --build-index or /index first. Proceeding without RAG.")
+            null
+        } else {
+            System.err.println("[headless] RAG active — knowledge base loaded.")
+            svc
+        }
+    } else null
+
+    // Build executor and model (same as interactive, no TTY dependency).
+    val promptExecutor = when (config.provider) {
+        LlmProvider.OPENROUTER -> simpleOpenRouterExecutor(apiKey!!)
+        LlmProvider.OLLAMA -> {
+            val client = if (config.localContextLength != null) {
+                OllamaClient(
+                    baseUrl = config.localUrl,
+                    contextWindowStrategy = ContextWindowStrategy.Companion.Fixed(config.localContextLength.toLong())
+                )
+            } else {
+                OllamaClient(baseUrl = config.localUrl)
+            }
+            SingleLLMPromptExecutor(client)
+        }
+    }
+
+    val llmModel = when (config.provider) {
+        LlmProvider.OPENROUTER -> config.model.openRouterModel
+        LlmProvider.OLLAMA -> LLModel(
+            provider = LLMProvider.Ollama,
+            id = config.localModelName,
+            capabilities = listOf(LLMCapability.Temperature, LLMCapability.Completion, LLMCapability.Tools),
+            contextLength = (config.localContextLength ?: 8_192).toLong()
+        )
+    }
+
+    // Use the custom --system-prompt if provided, otherwise fall back to the built-in review prompt.
+    val reviewSystemPrompt =
+        if (config.systemPrompt == "You are a helpful assistant. Answer user questions concisely.") {
+            PR_REVIEW_SYSTEM_PROMPT
+        } else {
+            config.systemPrompt
+        }
+
+    val agentFactory: (String, ToolRegistry) -> AIAgent<String, String> = { systemPrompt, toolRegistry ->
+        AIAgent(
+            promptExecutor = promptExecutor,
+            llmModel = llmModel,
+            strategy = chatSingleRunGraphStrategy(),
+            systemPrompt = systemPrompt,
+            temperature = config.temperature,
+            toolRegistry = toolRegistry,
+        )
+    }
+
+    val conversationManager = ConversationManager(
+        agentFactory = agentFactory,
+        strategy = SlidingWindowStrategy(windowSize = 1),
+        profileManager = ProfileManager(),
+        invariantStorage = InvariantStorage()
+    )
+    conversationManager.setBaseSystemPrompt(reviewSystemPrompt)
+
+    // Build user message — truncate very large diffs to stay within the model's context window.
+    val truncated = diffContent.length > MAX_DIFF_CHARS
+    val diffBody = diffContent.take(MAX_DIFF_CHARS)
+    val userMessage = buildString {
+        append("Review the following pull request diff:\n\n```diff\n")
+        append(diffBody)
+        if (truncated) append("\n\n... [diff truncated at $MAX_DIFF_CHARS characters — only the first part was reviewed]")
+        append("\n```")
+    }
+
+    val messageToSend = if (ragService != null) {
+        val ragResult = ragService.augment(userMessage)
+        System.err.println("[headless] RAG augmented with ${ragResult.chunksFound} context chunks.")
+        ragResult.augmentedMessage
+    } else {
+        userMessage
+    }
+
+    val result = conversationManager.sendMessage(messageToSend)
+
+    ragService?.close()
+
+    result.fold(
+        onSuccess = { stats ->
+            output.printPlain(stats.response)
+            exitProcess(0)
+        },
+        onFailure = { error ->
+            System.err.println("ERROR: LLM call failed: ${error.message}")
+            exitProcess(1)
+        }
+    )
 }
 
 suspend fun handleMessage(
