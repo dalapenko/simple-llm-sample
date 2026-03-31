@@ -33,6 +33,9 @@ object CliParser {
         var localMaxTokens: Int? = null
         var localContextLength: Int? = null
         var presetName: String? = null
+        var headlessMode = false
+        var diffFilePath: String? = null
+        var buildIndexPath: String? = null
 
         // Track fields explicitly set by the user so preset values don't overwrite them.
         val explicitlySet = mutableSetOf<String>()
@@ -255,6 +258,29 @@ object CliParser {
                     }
                 }
 
+                "--headless" -> {
+                    headlessMode = true
+                    i++
+                }
+
+                "--diff-file" -> {
+                    if (i + 1 < args.size) {
+                        diffFilePath = args[i + 1]
+                        i += 2
+                    } else {
+                        throw IllegalArgumentException("--diff-file requires a path argument")
+                    }
+                }
+
+                "--build-index" -> {
+                    if (i + 1 < args.size) {
+                        buildIndexPath = args[i + 1]
+                        i += 2
+                    } else {
+                        throw IllegalArgumentException("--build-index requires a directory path argument")
+                    }
+                }
+
                 else -> {
                     throw IllegalArgumentException("Unknown argument: ${args[i]}")
                 }
@@ -295,6 +321,9 @@ object CliParser {
             localMaxTokens,
             localContextLength,
             presetName,
+            headlessMode,
+            diffFilePath,
+            buildIndexPath,
         )
     }
 
@@ -352,6 +381,14 @@ ${SupportedModel.entries.joinToString("\n") { "                                 
               --embedding-model NAME    Ollama embedding model for /index and RAG (default: nomic-embed-text)
                                         Examples: nomic-embed-text (768d), mxbai-embed-large (1024d), all-minilm (384d)
                                         Note: index and RAG must use the same embedding model.
+
+            Headless / CI Mode:
+              --headless                Run in headless CI mode: single LLM turn, plain stdout, then exit.
+                                        Designed for GitHub Actions and other non-interactive pipelines.
+              --diff-file PATH          Path to a file containing the git diff to review (headless only).
+                                        If omitted, diff is read from stdin.
+              --build-index PATH        Index a directory before running the review (headless only).
+                                        Skips indexing if the knowledge base already exists.
 
             Interactive Commands:
               /help       Show available commands

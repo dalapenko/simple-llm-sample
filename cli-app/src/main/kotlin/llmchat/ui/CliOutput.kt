@@ -220,6 +220,14 @@ class CliOutput(private val terminal: Terminal) {
         terminal.println()
     }
 
+    /**
+     * Output plain text to stdout with no ANSI codes or Mordant formatting.
+     * Used in headless/CI mode where terminal rendering would corrupt captured output.
+     */
+    fun printPlain(text: String) {
+        println(text)
+    }
+
     fun printAssistantResponse(rawResponse: String) {
         val sanitized = AnsiSanitizer.strip(rawResponse)
         terminal.println()

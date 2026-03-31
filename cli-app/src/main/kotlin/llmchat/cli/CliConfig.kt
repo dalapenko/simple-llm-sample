@@ -24,6 +24,12 @@ data class CliConfig(
     val localContextLength: Int? = null,
     /** Name of the active preset, if loaded via --preset. Informational only. */
     val presetName: String? = null,
+    /** Run in headless/CI mode: single-turn, no interactive terminal, plain stdout output. */
+    val headlessMode: Boolean = false,
+    /** Path to a file containing the git diff to review (headless mode). Falls back to stdin if null. */
+    val diffFilePath: String? = null,
+    /** Path to a directory to index before reviewing (headless mode). Skips if knowledge base already exists. */
+    val buildIndexPath: String? = null,
 ) {
     val ragEnabled: Boolean get() = ragMode != null
 }
