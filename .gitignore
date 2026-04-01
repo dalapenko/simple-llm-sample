@@ -51,3 +51,7 @@ CLAUDE.md
 ### Other ###
 scripts
 internal
+
+### Support data — may contain PII, never commit ###
+users_tickets.json
+**/support-data/users_tickets.json

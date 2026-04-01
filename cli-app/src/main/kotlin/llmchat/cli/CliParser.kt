@@ -36,21 +36,31 @@ object CliParser {
         var headlessMode = false
         var diffFilePath: String? = null
         var buildIndexPath: String? = null
+        var supportTicketId: String? = null
+        var supportMcpJarPath: String? = null
+
+        // Detect "support" subcommand as first positional argument.
+        // Strip it so the remainder is processed as standard --flags.
+        val effectiveArgs = if (args.isNotEmpty() && args[0] == "support") {
+            args.drop(1).toTypedArray()
+        } else {
+            args
+        }
 
         // Track fields explicitly set by the user so preset values don't overwrite them.
         val explicitlySet = mutableSetOf<String>()
 
         var i = 0
-        while (i < args.size) {
-            when (args[i]) {
+        while (i < effectiveArgs.size) {
+            when (effectiveArgs[i]) {
                 "--help", "-h" -> {
                     showHelp = true
                     i++
                 }
 
                 "--system-prompt" -> {
-                    if (i + 1 < args.size) {
-                        systemPrompt = args[i + 1]
+                    if (i + 1 < effectiveArgs.size) {
+                        systemPrompt = effectiveArgs[i + 1]
                         explicitlySet += "systemPrompt"
                         i += 2
                     } else {
@@ -59,9 +69,9 @@ object CliParser {
                 }
 
                 "--temperature" -> {
-                    if (i + 1 < args.size) {
+                    if (i + 1 < effectiveArgs.size) {
                         try {
-                            temperature = args[i + 1].toDouble()
+                            temperature = effectiveArgs[i + 1].toDouble()
                             if (temperature !in 0.0..2.0) {
                                 throw IllegalArgumentException("--temperature must be between 0.0 and 2.0")
                             }
@@ -76,8 +86,8 @@ object CliParser {
                 }
 
                 "--model" -> {
-                    if (i + 1 < args.size) {
-                        val requestedModel = args[i + 1]
+                    if (i + 1 < effectiveArgs.size) {
+                        val requestedModel = effectiveArgs[i + 1]
                         model = SupportedModel.fromCliName(requestedModel)
                             ?: throw IllegalArgumentException(
                                 "--model must be one of: ${SupportedModel.availableNames.joinToString(", ")}"
@@ -89,8 +99,8 @@ object CliParser {
                 }
 
                 "--context-window" -> {
-                    if (i + 1 < args.size) {
-                        val n = args[i + 1].toIntOrNull()
+                    if (i + 1 < effectiveArgs.size) {
+                        val n = effectiveArgs[i + 1].toIntOrNull()
                             ?: throw IllegalArgumentException("--context-window must be a positive integer")
                         if (n < 1) throw IllegalArgumentException("--context-window must be >= 1")
                         contextWindowSize = n
@@ -102,8 +112,8 @@ object CliParser {
                 }
 
                 "--summary-batch" -> {
-                    if (i + 1 < args.size) {
-                        val n = args[i + 1].toIntOrNull()
+                    if (i + 1 < effectiveArgs.size) {
+                        val n = effectiveArgs[i + 1].toIntOrNull()
                             ?: throw IllegalArgumentException("--summary-batch must be a positive integer")
                         if (n < 1) throw IllegalArgumentException("--summary-batch must be >= 1")
                         summaryBatchSize = n
@@ -114,8 +124,8 @@ object CliParser {
                 }
 
                 "--strategy" -> {
-                    if (i + 1 < args.size) {
-                        val name = args[i + 1]
+                    if (i + 1 < effectiveArgs.size) {
+                        val name = effectiveArgs[i + 1]
                         strategyType = StrategyType.fromCliName(name)
                             ?: throw IllegalArgumentException(
                                 "--strategy must be one of: ${StrategyType.availableNames.joinToString(", ")}"
@@ -127,8 +137,8 @@ object CliParser {
                 }
 
                 "--profile" -> {
-                    if (i + 1 < args.size) {
-                        profilePath = args[i + 1]
+                    if (i + 1 < effectiveArgs.size) {
+                        profilePath = effectiveArgs[i + 1]
                         i += 2
                     } else {
                         throw IllegalArgumentException("--profile requires a path argument")
@@ -146,8 +156,8 @@ object CliParser {
                 }
 
                 "--mode" -> {
-                    if (i + 1 < args.size) {
-                        val name = args[i + 1]
+                    if (i + 1 < effectiveArgs.size) {
+                        val name = effectiveArgs[i + 1]
                         ragMode = RagMode.fromCliName(name)
                             ?: throw IllegalArgumentException(
                                 "--mode must be one of: ${RagMode.availableNames.joinToString(", ")}"
@@ -159,8 +169,8 @@ object CliParser {
                 }
 
                 "--threshold" -> {
-                    if (i + 1 < args.size) {
-                        val v = args[i + 1].toDoubleOrNull()
+                    if (i + 1 < effectiveArgs.size) {
+                        val v = effectiveArgs[i + 1].toDoubleOrNull()
                             ?: throw IllegalArgumentException("--threshold must be a number between 0.0 and 1.0")
                         if (v !in 0.0..1.0) throw IllegalArgumentException("--threshold must be between 0.0 and 1.0")
                         similarityThreshold = v
@@ -171,8 +181,8 @@ object CliParser {
                 }
 
                 "--top-k" -> {
-                    if (i + 1 < args.size) {
-                        val n = args[i + 1].toIntOrNull()
+                    if (i + 1 < effectiveArgs.size) {
+                        val n = effectiveArgs[i + 1].toIntOrNull()
                             ?: throw IllegalArgumentException("--top-k must be a positive integer")
                         if (n < 1) throw IllegalArgumentException("--top-k must be >= 1")
                         ragTopK = n
@@ -183,8 +193,8 @@ object CliParser {
                 }
 
                 "--provider" -> {
-                    if (i + 1 < args.size) {
-                        val name = args[i + 1]
+                    if (i + 1 < effectiveArgs.size) {
+                        val name = effectiveArgs[i + 1]
                         provider = LlmProvider.fromCliName(name)
                             ?: throw IllegalArgumentException(
                                 "--provider must be one of: ${LlmProvider.availableNames.joinToString(", ")}"
@@ -196,8 +206,8 @@ object CliParser {
                 }
 
                 "--local-model" -> {
-                    if (i + 1 < args.size) {
-                        localModelName = args[i + 1]
+                    if (i + 1 < effectiveArgs.size) {
+                        localModelName = effectiveArgs[i + 1]
                         explicitlySet += "localModel"
                         i += 2
                     } else {
@@ -206,8 +216,8 @@ object CliParser {
                 }
 
                 "--local-url" -> {
-                    if (i + 1 < args.size) {
-                        localUrl = args[i + 1]
+                    if (i + 1 < effectiveArgs.size) {
+                        localUrl = effectiveArgs[i + 1]
                         i += 2
                     } else {
                         throw IllegalArgumentException("--local-url requires an argument")
@@ -215,8 +225,8 @@ object CliParser {
                 }
 
                 "--embedding-model" -> {
-                    if (i + 1 < args.size) {
-                        localEmbeddingModel = args[i + 1]
+                    if (i + 1 < effectiveArgs.size) {
+                        localEmbeddingModel = effectiveArgs[i + 1]
                         i += 2
                     } else {
                         throw IllegalArgumentException("--embedding-model requires an argument")
@@ -224,8 +234,8 @@ object CliParser {
                 }
 
                 "--preset" -> {
-                    if (i + 1 < args.size) {
-                        presetName = args[i + 1]
+                    if (i + 1 < effectiveArgs.size) {
+                        presetName = effectiveArgs[i + 1]
                         i += 2
                     } else {
                         throw IllegalArgumentException("--preset requires a name argument")
@@ -233,8 +243,8 @@ object CliParser {
                 }
 
                 "--local-max-tokens" -> {
-                    if (i + 1 < args.size) {
-                        val n = args[i + 1].toIntOrNull()
+                    if (i + 1 < effectiveArgs.size) {
+                        val n = effectiveArgs[i + 1].toIntOrNull()
                             ?: throw IllegalArgumentException("--local-max-tokens must be a positive integer")
                         if (n < 1) throw IllegalArgumentException("--local-max-tokens must be >= 1")
                         localMaxTokens = n
@@ -246,8 +256,8 @@ object CliParser {
                 }
 
                 "--local-context-length" -> {
-                    if (i + 1 < args.size) {
-                        val n = args[i + 1].toIntOrNull()
+                    if (i + 1 < effectiveArgs.size) {
+                        val n = effectiveArgs[i + 1].toIntOrNull()
                             ?: throw IllegalArgumentException("--local-context-length must be a positive integer")
                         if (n < 1) throw IllegalArgumentException("--local-context-length must be >= 1")
                         localContextLength = n
@@ -264,8 +274,8 @@ object CliParser {
                 }
 
                 "--diff-file" -> {
-                    if (i + 1 < args.size) {
-                        diffFilePath = args[i + 1]
+                    if (i + 1 < effectiveArgs.size) {
+                        diffFilePath = effectiveArgs[i + 1]
                         i += 2
                     } else {
                         throw IllegalArgumentException("--diff-file requires a path argument")
@@ -273,16 +283,34 @@ object CliParser {
                 }
 
                 "--build-index" -> {
-                    if (i + 1 < args.size) {
-                        buildIndexPath = args[i + 1]
+                    if (i + 1 < effectiveArgs.size) {
+                        buildIndexPath = effectiveArgs[i + 1]
                         i += 2
                     } else {
                         throw IllegalArgumentException("--build-index requires a directory path argument")
                     }
                 }
 
+                "--ticket-id" -> {
+                    if (i + 1 < effectiveArgs.size) {
+                        supportTicketId = effectiveArgs[i + 1]
+                        i += 2
+                    } else {
+                        throw IllegalArgumentException("--ticket-id requires a ticket ID argument (e.g. TKT-201)")
+                    }
+                }
+
+                "--support-mcp-jar" -> {
+                    if (i + 1 < effectiveArgs.size) {
+                        supportMcpJarPath = effectiveArgs[i + 1]
+                        i += 2
+                    } else {
+                        throw IllegalArgumentException("--support-mcp-jar requires a path argument")
+                    }
+                }
+
                 else -> {
-                    throw IllegalArgumentException("Unknown argument: ${args[i]}")
+                    throw IllegalArgumentException("Unknown argument: ${effectiveArgs[i]}")
                 }
             }
         }
@@ -324,6 +352,8 @@ object CliParser {
             headlessMode,
             diffFilePath,
             buildIndexPath,
+            supportTicketId,
+            supportMcpJarPath,
         )
     }
 
@@ -390,6 +420,14 @@ ${SupportedModel.entries.joinToString("\n") { "                                 
               --build-index PATH        Index a directory before running the review (headless only).
                                         Skips indexing if the knowledge base already exists.
 
+            Support Mode:
+              support --ticket-id ID    Run the User Support Assistant for a specific ticket.
+                                        Connects to the CRM MCP server, indexes the support FAQ,
+                                        and returns a single empathetic support response.
+              --ticket-id ID            Ticket ID to look up (e.g. TKT-201). Required for support mode.
+              --support-mcp-jar PATH    Path to mcp-server-support-all.jar
+                                        (default: mcp-server-support/build/libs/mcp-server-support-all.jar)
+
             Interactive Commands:
               /help       Show available commands
               /clear      Clear conversation history
@@ -415,6 +453,10 @@ ${SupportedModel.entries.joinToString("\n") { "                                 
               ./gradlew run --args="--provider ollama --preset baseline"
               ./gradlew run --args="--provider ollama --preset code-review"
               ./gradlew run --args="--provider ollama --preset code-review --temperature 0.3"  (override one field)
+
+            Examples (Support Assistant):
+              ./gradlew run --args="support --ticket-id TKT-201 --provider openrouter"
+              ./gradlew run --args="support --ticket-id TKT-101 --provider ollama --local-model qwen2.5:7b"
 
             Environment Variables:
               OPENROUTER_API_KEY    Required for --provider openrouter (default). Not needed for local providers.

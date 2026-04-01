@@ -48,6 +48,8 @@ import llmchat.rag.AdvancedRagService
 import llmchat.rag.ConversationalRagService
 import llmchat.rag.RagPipeline
 import llmchat.rag.RagService
+import llmchat.support.SupportRunConfig
+import llmchat.support.runSupportAgent
 import llmchat.ui.ChatInputReader
 import llmchat.ui.CliOutput
 import llmchat.ui.McpToolCallDisplayProcessor
@@ -85,7 +87,22 @@ fun main(args: Array<String>) {
         }
 
         runBlocking {
-            if (config.headlessMode) {
+            if (config.isSupportMode) {
+                val mcpJar = config.supportMcpJarPath
+                    ?: "mcp-server-support/build/libs/mcp-server-support-1.0-SNAPSHOT-all.jar"
+                val supportConfig = SupportRunConfig(
+                    ticketId = config.supportTicketId!!,
+                    apiKey = apiKey,
+                    provider = config.provider,
+                    localModelName = config.localModelName,
+                    localUrl = config.localUrl,
+                    localEmbeddingModel = config.localEmbeddingModel,
+                    localContextLength = config.localContextLength,
+                    temperature = config.temperature,
+                    mcpJarPath = mcpJar
+                )
+                runSupportAgent(supportConfig, output)
+            } else if (config.headlessMode) {
                 startHeadlessCli(apiKey, config, output)
             } else {
                 startInteractiveCli(apiKey, config, output, terminal, this)

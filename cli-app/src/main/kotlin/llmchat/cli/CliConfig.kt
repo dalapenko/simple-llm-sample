@@ -30,6 +30,11 @@ data class CliConfig(
     val diffFilePath: String? = null,
     /** Path to a directory to index before reviewing (headless mode). Skips if knowledge base already exists. */
     val buildIndexPath: String? = null,
+    /** Ticket ID for the support subcommand (e.g. TKT-201). Null = not a support run. */
+    val supportTicketId: String? = null,
+    /** Path to the pre-built support MCP server JAR. Defaults to conventional build output path. */
+    val supportMcpJarPath: String? = null,
 ) {
     val ragEnabled: Boolean get() = ragMode != null
+    val isSupportMode: Boolean get() = supportTicketId != null
 }
