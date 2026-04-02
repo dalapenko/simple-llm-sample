@@ -34,6 +34,8 @@ class ConversationManager(
     private var autoMode: Boolean = false
     private var mcpToolRegistry: ToolRegistry = ToolRegistry.EMPTY
     private var mcpConnectionInfo: McpConnectionManager.ConnectionInfo? = null
+    private var nativeToolRegistry: ToolRegistry = ToolRegistry.EMPTY
+    private var fileToolsSystemBlock: String = ""
 
     /** Task state block injected by ConversationalRagService after each turn. */
     private var ragTaskStateBlock: String = ""
@@ -49,6 +51,14 @@ class ConversationManager(
         mcpConnectionInfo = null
     }
 
+    fun setNativeToolRegistry(registry: ToolRegistry) {
+        nativeToolRegistry += registry
+    }
+
+    fun setFileToolsSystemBlock(block: String) {
+        fileToolsSystemBlock = block
+    }
+
     fun setTaskFsm(fsm: TaskFSM?) {
         taskFsm = fsm
     }
@@ -62,7 +72,8 @@ class ConversationManager(
     suspend fun sendMessage(userMessage: String): ChatResult<RequestStatistics> {
         return try {
             val enrichedSystemPrompt = buildSystemPrompt()
-            val agent = agentFactory(enrichedSystemPrompt, mcpToolRegistry)
+            val mergedToolRegistry = mcpToolRegistry + nativeToolRegistry
+            val agent = agentFactory(enrichedSystemPrompt, mergedToolRegistry)
 
             val inputTokens = TokenCounter.estimate(userMessage)
             val statsBeforeTurn = strategy.estimateTokenStats()
@@ -144,6 +155,10 @@ class ConversationManager(
             if (ragTaskStateBlock.isNotEmpty()) {
                 append("\n\n")
                 append(ragTaskStateBlock)
+            }
+            if (fileToolsSystemBlock.isNotEmpty()) {
+                append("\n\n")
+                append(fileToolsSystemBlock)
             }
         }
     }

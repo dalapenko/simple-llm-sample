@@ -3,6 +3,7 @@ package llmchat
 import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.agent.config.AIAgentConfig
 import ai.koog.agents.core.tools.ToolRegistry
+import ai.koog.agents.core.tools.reflect.tools
 import ai.koog.agents.features.tracing.feature.Tracing
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.llms.SingleLLMPromptExecutor
@@ -31,6 +32,7 @@ import llmchat.agent.context.ContextStrategy
 import llmchat.agent.context.LayeredMemoryStrategy
 import llmchat.agent.context.SlidingWindowStrategy
 import llmchat.agent.context.StickyFactsStrategy
+import llmchat.agent.filesystem.FileSystemToolSet
 import llmchat.agent.invariant.InvariantStorage
 import llmchat.agent.mcp.McpConnectionManager
 import llmchat.agent.memory.MemoryLayer
@@ -340,6 +342,23 @@ suspend fun startInteractiveCli(
         invariantStorage = invariantStorage
     )
     conversationManager.setBaseSystemPrompt(config.systemPrompt)
+
+    // File system tools
+    val projectRoot = File(".").canonicalFile
+    val fileToolSet = FileSystemToolSet(projectRoot)
+    val fileToolRegistry = ToolRegistry {
+        tools(fileToolSet)
+    }
+    conversationManager.setNativeToolRegistry(fileToolRegistry)
+    conversationManager.setFileToolsSystemBlock(
+        """
+[FILE TOOLS AVAILABLE]
+You have access to the project file system via tools: read_file, write_file, search_files, list_files, run_build_check.
+Sandbox root: ${projectRoot.canonicalPath}
+All paths must stay within this root. After any Kotlin source file modification, call run_build_check.
+[/FILE TOOLS AVAILABLE]
+""".trimIndent()
+    )
 
     // Task state resume
     if (TaskStateStorage.hasActiveState()) {
